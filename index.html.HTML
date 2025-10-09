@@ -71,10 +71,15 @@
             border-radius: 4px;
             cursor: crosshair;
             background-color: #fff;
+            /* Garante que o canvas não seja redimensionado pelo CSS, apenas pelo JS */
+            touch-action: none; 
         }
         .small-btn {
             @apply px-2 py-1 text-xs rounded transition duration-150;
         }
+
+        /* Oculta colunas da tabela em mobile, se necessário. Aqui não será necessário pois foi substituído por cards em mobile */
+        /* .acertos-tabela-mobile .placa-col, .acertos-tabela-mobile .comissao-col { @apply hidden md:table-cell; } */
     </style>
     <!-- Firebase V8 CDN (compatível com single HTML file) -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -260,8 +265,8 @@
                 </div>
             </div>
 
-            <!-- Tabela de Acertos -->
-            <div class="overflow-x-auto bg-white p-4 rounded-lg shadow">
+            <!-- Tabela de Acertos (Desktop) -->
+            <div class="hidden md:block overflow-x-auto bg-white p-4 rounded-lg shadow">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
@@ -270,7 +275,7 @@
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 2)">Frete</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 3)">Comissão</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 4)">Despesas</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 5)">Sobra">Sobra</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 5)">Sobra</th>
                             <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
                         </tr>
                     </thead>
@@ -278,6 +283,11 @@
                         <!-- Linhas de acerto serão injetadas aqui -->
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Lista de Acertos (Mobile/Cards) -->
+            <div id="acertosMobileList" class="md:hidden space-y-4">
+                <!-- Cards de acerto serão injetados aqui (mobile) -->
             </div>
             
             <div class="mt-4 flex justify-end">
@@ -293,7 +303,7 @@
 
             <!-- Formulário de Lançamento Manual -->
             <div class="bg-gray-50 p-6 rounded-lg shadow-md mb-6">
-                <h3 class="text-lg font-semibold text-gray-700 mb-4">Novo Lançamento Manual</h3>
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Lançamentos</h3>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <div>
                         <label class="block text-gray-700 mb-1">Tipo <span class="text-red-500">*</span></label>
@@ -312,18 +322,18 @@
                     </div>
                     <div>
                         <label class="block text-gray-700 mb-1">Categoria</label>
-                        <input type="text" id="categoriaCaixa" class="w-full border p-2 rounded" placeholder="Ex: Combustível, Salário">
+                        <input type="text" id="categoriaCaixa" class="w-full border p-2 rounded" placeholder="Ex: Oficina, cartão">
                     </div>
                 </div>
 
                 <div class="mb-4">
                     <label class="block text-gray-700 mb-1">Descrição</label>
-                    <textarea id="descricaoCaixa" class="w-full border p-2 rounded h-16" placeholder="Descrição detalhada do lançamento"></textarea>
+                    <textarea id="descricaoCaixa" class="w-full border p-2 rounded h-16" placeholder="Descrição detalhada do lançamento, nome lugar, nome banco"></textarea>
                 </div>
 
                 <!-- Opções de Parcelamento (Saída) -->
                 <div id="opcoesParcela" class="hidden bg-white p-4 rounded-lg shadow-inner mb-4">
-                    <div class="flex space-x-6 items-center mb-4">
+                    <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-6 items-center mb-4">
                         <div class="flex items-center">
                             <input type="checkbox" id="isBoleto" onchange="toggleVencimentoCheque()" class="w-4 h-4 text-blue-600 border-gray-300 rounded">
                             <label class="ml-2 text-gray-700">Boleto (Vencimento)</label>
@@ -332,11 +342,11 @@
                             <input type="checkbox" id="isCheque" onchange="toggleVencimentoCheque()" class="w-4 h-4 text-blue-600 border-gray-300 rounded">
                             <label class="ml-2 text-gray-700">Cheque (Apresentação)</label>
                         </div>
-                        <div class="flex-grow">
+                        <div class="flex-grow w-full md:w-auto">
                             <label class="block text-gray-700 mb-1">Qtd. Parcelas</label>
                             <input type="number" id="qtdParcelas" oninput="toggleVencimentoCheque()" value="1" min="1" class="w-full border p-2 rounded">
                         </div>
-                        <div class="flex-grow">
+                        <div class="flex-grow w-full md:w-auto">
                             <label class="block text-gray-700 mb-1"><span id="labelVencimento">Vencimento da 1ª Parcela</span></label>
                             <input type="date" id="dataVencimento" onchange="toggleVencimentoCheque()" class="w-full border p-2 rounded">
                         </div>
@@ -381,7 +391,7 @@
             <div class="bg-white p-4 rounded-lg shadow mb-6">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
                     <!-- Filtro por Mês (Checkbox e Mês) -->
-                    <div class="col-span-2 flex items-end space-x-4">
+                    <div class="col-span-2 flex flex-col md:flex-row items-end space-y-2 md:space-y-0 md:space-x-4">
                         <div>
                             <label class="block text-gray-700 mb-1">Mês de Análise</label>
                             <input type="month" id="filtroMes" class="border p-2 rounded w-40">
@@ -572,6 +582,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <label class="block text-gray-700 mb-2">Assinatura do Motorista:</label>
+                <!-- Alterado o height para ser flexível em mobile -->
                 <canvas id="canvasMotorista" class="signature-canvas w-full h-32"></canvas>
                 <button onclick="limparAssinatura('Motorista')" class="button-danger text-white px-4 py-2 rounded w-full mt-2">
                     <span class="mr-1">🧼</span> Limpar Assinatura
@@ -579,6 +590,7 @@
             </div>
             <div>
                 <label class="block text-gray-700 mb-2">Assinatura do Proprietário:</label>
+                <!-- Alterado o height para ser flexível em mobile -->
                 <canvas id="canvasProprietario" class="signature-canvas w-full h-32"></canvas>
                 <button onclick="limparAssinatura('Proprietario')" class="button-danger text-white px-4 py-2 rounded w-full mt-2">
                     <span class="mr-1">🧼</span> Limpar Assinatura
@@ -597,15 +609,17 @@
     </div>
 </div>
 
-<!-- Modal: Recibo de Acerto (para visualização final/PDF) -->
+<!-- Modal: Recibo de Acerto (para visualização final/PDF) - Adicionado ID para PDF -->
 <div id="modalRecibo" class="modal-overlay hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center">
-    <div class="bg-white rounded-lg p-8 w-[500px] shadow-xl">
+    <!-- Reduzida a largura para caber melhor no A4 -->
+    <div class="bg-white rounded-lg p-8 w-11/12 max-w-sm shadow-xl"> 
         <div class="flex justify-between items-center mb-6 border-b pb-2">
             <h3 class="text-xl font-bold text-blue-700">📄 Recibo de Acerto</h3>
             <button onclick="fecharModalRecibo()" class="text-gray-500 hover:text-red-500">✖</button>
         </div>
         
-        <div id="reciboContent" class="space-y-3 text-gray-700">
+        <!-- Adicionado ID "reciboParaPDF" para html2canvas capturar o conteúdo -->
+        <div id="reciboParaPDF" class="space-y-3 text-gray-700">
             <!-- Conteúdo do recibo será injetado aqui -->
             <p><strong>Empresa:</strong> <span id="reciboEmpresa"></span></p>
             <p><strong>Motorista:</strong> <span id="reciboMotorista"></span></p>
@@ -681,7 +695,9 @@
 
 
 <!-- --------------------------------------- SCRIPTS --------------------------------------- -->
+<!-- Importações de PDF atualizadas: jsPDF + html2canvas para melhor renderização de HTML -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
     // ** VARIÁVEIS GLOBAIS FIREBASE **
     const firebaseConfig = {
@@ -887,7 +903,9 @@
             // Inicia o carregamento dos dados após o login
             initSystem(); 
         } else {
-            alert("Usuário ou senha inválidos!");
+            // Usando console.log em vez de alert para não travar o ambiente
+            console.error("Usuário ou senha inválidos!");
+            // Exibir mensagem de erro na tela, se possível
         }
     }
 
@@ -978,7 +996,7 @@
             document.getElementById('descricaoDespesa').value = '';
             document.getElementById('valorDespesa').value = '';
         } else {
-            alert('Preencha a descrição e o valor da despesa.');
+            console.error('Preencha a descrição e o valor da despesa.');
         }
     }
 
@@ -1027,7 +1045,7 @@
         const sobra = currencyToFloat(document.getElementById('sobraAcerto').textContent);
 
         if (!motorista || !caminhaoId || frete <= 0 || comissao < 0 || !dataViagem) {
-            alert('Preencha Motorista, Caminhão, Frete, Comissão e Data de Viagem!');
+            console.error('Preencha Motorista, Caminhão, Frete, Comissão e Data de Viagem!');
             return;
         }
 
@@ -1055,7 +1073,7 @@
                 // 1. Edição de Acerto
                 await db.collection("acertos").doc(acertoEmEdicaoId).update(acertoData);
                 await atualizarLancamentoCaixaAcerto(acertoEmEdicaoId, motorista, sobra, dataViagem);
-                alert('Acerto atualizado e Sobra no Caixa sincronizada com sucesso!');
+                console.log('Acerto atualizado e Sobra no Caixa sincronizada com sucesso!');
             } else {
                 // 2. Novo Acerto
                 const docRef = await db.collection("acertos").add(acertoData);
@@ -1063,7 +1081,7 @@
                 if (sobra > 0) {
                     await lancarSobraNoCaixa(docRef.id, motorista, sobra, dataViagem);
                 }
-                alert('Acerto salvo e Sobra de Viagem lançada no Caixa!');
+                console.log('Acerto salvo e Sobra de Viagem lançada no Caixa!');
             }
             
             limparCamposAcerto();
@@ -1071,7 +1089,7 @@
             loadAllCaixaAndFilter(); // Atualiza o caixa
         } catch (error) {
             console.error("Erro ao salvar acerto:", error);
-            alert("Erro ao salvar acerto. Verifique o console.");
+            // alert("Erro ao salvar acerto. Verifique o console."); // Não usar alert
         }
     }
 
@@ -1126,7 +1144,9 @@
     /** Carrega e Exibe Acertos com Filtros */
     async function carregarAcertos() {
         const tabela = document.getElementById('acertosTable');
+        const mobileList = document.getElementById('acertosMobileList');
         tabela.innerHTML = '<tr><td colspan="7" class="text-center py-4">Carregando acertos...</td></tr>';
+        mobileList.innerHTML = '<div class="text-center py-4">Carregando acertos...</div>';
 
         const dataInicio = document.getElementById('dataInicioAcerto').value;
         const dataFim = document.getElementById('dataFimAcerto').value;
@@ -1145,9 +1165,12 @@
             const snapshot = await query.get();
             let totalFrete = 0, totalComissao = 0, totalDespesas = 0, totalSobra = 0;
             tabela.innerHTML = ''; // Limpa antes de renderizar
+            mobileList.innerHTML = '';
 
             if (snapshot.empty) {
-                 tabela.innerHTML = '<tr><td colspan="7" class="text-center py-4">Nenhum acerto encontrado para o período.</td></tr>';
+                 const emptyMsg = '<tr><td colspan="7" class="text-center py-4">Nenhum acerto encontrado para o período.</td></tr>';
+                 tabela.innerHTML = emptyMsg;
+                 mobileList.innerHTML = '<div class="text-center py-4">Nenhum acerto encontrado para o período.</div>';
                  // Atualiza totais para zero
                  document.getElementById('totalFreteAcerto').textContent = floatToCurrency(0);
                  document.getElementById('totalComissaoAcerto').textContent = floatToCurrency(0);
@@ -1167,8 +1190,17 @@
 
                 const dataFormatada = acerto.dataViagem ? formatDateBR(acerto.dataViagem.toDate().toISOString().split('T')[0]) : '-';
                 const totalDespesasMonetario = floatToCurrency(acerto.totalDespesas || 0);
-                const despesasTooltip = acerto.despesas.map(d => `${d.descricao}: ${floatToCurrency(d.valor)}`).join('\n');
 
+                const acoesHtml = `
+                    <button onclick="abrirModalResumoViagem('${acerto.id}')" class="text-gray-600 hover:text-blue-900 mr-2 small-btn" title="Resumo/Despesas">👁️</button>
+                    <button onclick="editarAcerto('${acerto.id}')" class="text-blue-600 hover:text-blue-900 mr-2 small-btn" title="Editar">✏️</button>
+                    <button onclick="excluirAcerto('${acerto.id}')" class="text-red-600 hover:text-red-900 mr-2 small-btn" title="Excluir">🗑️</button>
+                    <button onclick="abrirModalAssinaturaRecibo('${acerto.id}')" class="text-green-600 hover:text-green-900 small-btn" title="Recibo">📄</button>
+                `;
+                
+                // ----------------------------------------
+                // 1. Renderização para DESKTOP (Tabela)
+                // ----------------------------------------
                 tabela.innerHTML += `
                     <tr class="hover:bg-gray-100">
                         <td class="px-6 py-4 whitespace-nowrap">${acerto.motorista}</td>
@@ -1180,12 +1212,31 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-green-700">${floatToCurrency(acerto.sobra || 0)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                            <button onclick="abrirModalResumoViagem('${acerto.id}')" class="text-gray-600 hover:text-blue-900 mr-2" title="Resumo/Despesas">👁️</button>
-                            <button onclick="editarAcerto('${acerto.id}')" class="text-blue-600 hover:text-blue-900 mr-2" title="Editar">✏️</button>
-                            <button onclick="excluirAcerto('${acerto.id}')" class="text-red-600 hover:text-red-900 mr-2" title="Excluir">🗑️</button>
-                            <button onclick="abrirModalAssinaturaRecibo('${acerto.id}')" class="text-green-600 hover:text-green-900" title="Recibo">📄</button>
+                            ${acoesHtml}
                         </td>
                     </tr>
+                `;
+
+                // ----------------------------------------
+                // 2. Renderização para MOBILE (Cards)
+                // ----------------------------------------
+                mobileList.innerHTML += `
+                    <div class="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
+                        <div class="flex justify-between items-start mb-2">
+                            <p class="font-bold text-lg text-blue-700">${acerto.motorista}</p>
+                            <span class="text-xs text-gray-500">${dataFormatada}</span>
+                        </div>
+                        <p class="text-sm text-gray-600 mb-1">Caminhão: ${acerto.caminhaoNome || acerto.caminhaoId}</p>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <p>Frete: <span class="font-semibold text-blue-800">${floatToCurrency(acerto.frete || 0)}</span></p>
+                            <p>Comissão: <span class="font-semibold text-red-600">${floatToCurrency(acerto.comissao || 0)}</span></p>
+                            <p>Despesas: <span class="font-semibold text-red-600">${totalDespesasMonetario}</span></p>
+                            <p>Sobra: <span class="font-bold text-green-700">${floatToCurrency(acerto.sobra || 0)}</span></p>
+                        </div>
+                        <div class="mt-3 pt-3 border-t flex justify-end">
+                            ${acoesHtml}
+                        </div>
+                    </div>
                 `;
             });
 
@@ -1197,7 +1248,9 @@
 
         } catch (error) {
             console.error("Erro ao carregar acertos:", error);
-            tabela.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-red-500">Erro ao carregar dados. Verifique o console.</td></tr>';
+            const errorMsg = '<tr><td colspan="7" class="text-center py-4 text-red-500">Erro ao carregar dados. Verifique o console.</td></tr>';
+            tabela.innerHTML = errorMsg;
+            mobileList.innerHTML = '<div class="text-center py-4 text-red-500">Erro ao carregar dados. Verifique o console.</div>';
         }
     }
 
@@ -1206,7 +1259,7 @@
         try {
             const doc = await db.collection('acertos').doc(acertoId).get();
             if (!doc.exists) {
-                alert('Acerto não encontrado!');
+                console.error('Acerto não encontrado!');
                 return;
             }
             acertoAtualData = doc.data();
@@ -1245,7 +1298,7 @@
             document.getElementById('modalResumoViagem').style.display = "flex";
         } catch (error) {
             console.error('Erro ao buscar acerto para resumo:', error);
-            alert('Erro ao carregar dados para resumo.');
+            // alert('Erro ao carregar dados para resumo.'); // Não usar alert
         }
     }
 
@@ -1262,7 +1315,7 @@
         try {
             const doc = await db.collection('acertos').doc(acertoId).get();
             if (!doc.exists) {
-                alert('Acerto não encontrado!');
+                console.error('Acerto não encontrado!');
                 return;
             }
             const acerto = doc.data();
@@ -1284,7 +1337,7 @@
             window.scrollTo({ top: 0, behavior: 'smooth' }); // Volta para o topo do formulário
         } catch (error) {
             console.error('Erro ao buscar acerto para edição:', error);
-            alert('Erro ao carregar dados para edição.');
+            // alert('Erro ao carregar dados para edição.'); // Não usar alert
         }
     }
 
@@ -1303,12 +1356,12 @@
 
             // Exclui o acerto
             await db.collection("acertos").doc(acertoId).delete();
-            alert('Acerto e lançamento de caixa excluídos com sucesso!');
+            console.log('Acerto e lançamento de caixa excluídos com sucesso!');
             carregarAcertos();
             loadAllCaixaAndFilter();
         } catch (error) {
             console.error("Erro ao excluir acerto:", error);
-            alert("Erro ao excluir acerto. Verifique o console.");
+            // alert("Erro ao excluir acerto. Verifique o console."); // Não usar alert
         }
     }
 
@@ -1317,7 +1370,7 @@
         try {
             const doc = await db.collection('acertos').doc(acertoId).get();
             if (!doc.exists) {
-                alert('Acerto não encontrado!');
+                console.error('Acerto não encontrado!');
                 return;
             }
             acertoAtualData = doc.data(); // Guarda os dados para usar no PDF
@@ -1330,40 +1383,55 @@
             document.getElementById('modalAssinaturaRecibo').classList.remove('hidden');
             document.getElementById('modalAssinaturaRecibo').style.display = "flex";
             
-            // Re-inicializa canvas para garantir que funcionem
+            // Re-inicializa canvas para garantir que funcionem (necessário para redimensionamento em mobile)
             initCanvas('Motorista');
             initCanvas('Proprietario');
 
         } catch (error) {
             console.error('Erro ao abrir modal de assinatura:', error);
-            alert('Erro ao carregar dados para assinatura.');
+            // alert('Erro ao carregar dados para assinatura.'); // Não usar alert
         }
     }
 
-    /** Inicializa Canvas de Assinatura */
+    /** Inicializa Canvas de Assinatura (CORRIGIDO PARA DPR E RESPONSIVIDADE) */
     function initCanvas(id) {
         const canvas = document.getElementById(`canvas${id}`);
-        // Verifica se o canvas existe
         if (!canvas) return; 
 
-        // Garante que o canvas tenha dimensões corretas (para mobile)
-        const parentWidth = canvas.parentElement.clientWidth;
-        canvas.width = parentWidth;
-        canvas.height = 128; 
-
         const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1; // Obtém o Device Pixel Ratio
+        
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
 
-        // Limpa o canvas (preenche com branco para garantir)
+        // Obtém o tamanho VISÍVEL do canvas (pelo CSS/Layout)
+        const rect = canvas.getBoundingClientRect();
+        const displayWidth = rect.width;
+        const displayHeight = rect.height; 
+
+        // Define a resolução INTERNA do canvas multiplicada pelo DPR
+        canvas.width = displayWidth * dpr;
+        canvas.height = displayHeight * dpr; 
+        
+        // Define o tamanho VISÍVEL (CSS) novamente (boa prática)
+        canvas.style.width = `${displayWidth}px`;
+        canvas.style.height = `${displayHeight}px`;
+
+        // Normaliza todas as operações de desenho para o DPR (escala o contexto)
+        ctx.scale(dpr, dpr);
+
+        // Limpa o canvas e configura o pincel
         ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, displayWidth, displayHeight); // Usa o tamanho visual para a limpeza
+        ctx.strokeStyle = '#000'; 
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round'; 
 
         function draw(e) {
             if (!isDrawing) return;
 
-            // Posição para mouse ou touch
             let clientX, clientY;
             if (e.touches && e.touches.length > 0) {
                 clientX = e.touches[0].clientX;
@@ -1373,21 +1441,19 @@
                 clientY = e.clientY;
             }
 
-            const rect = canvas.getBoundingClientRect();
-            // Correção da escala para o desenho funcionar corretamente
-            const currentX = (clientX - rect.left) * (canvas.width / rect.width);
-            const currentY = (clientY - rect.top) * (canvas.height / rect.height);
+            // NOVO CÁLCULO: Usa o rect do display e o dpr já foi aplicado no ctx.scale
+            const currentX = clientX - rect.left;
+            const currentY = clientY - rect.top;
             
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
             ctx.lineTo(currentX, currentY);
-            ctx.strokeStyle = '#000';
-            ctx.lineWidth = 2;
-            ctx.lineCap = 'round';
             ctx.stroke();
             
             lastX = currentX;
             lastY = currentY;
+            
+            e.preventDefault();
         }
 
         function startDrawing(e) {
@@ -1401,9 +1467,16 @@
                 clientY = e.clientY;
             }
             
-            const rect = canvas.getBoundingClientRect();
-            lastX = (clientX - rect.left) * (canvas.width / rect.width);
-            lastY = (clientY - rect.top) * (canvas.height / rect.height);
+            // Define o ponto inicial usando as coordenadas relativas ao canvas visual
+            lastX = clientX - rect.left;
+            lastY = clientY - rect.top;
+            
+            // Desenha um ponto para toques rápidos
+            ctx.beginPath();
+            ctx.arc(lastX, lastY, ctx.lineWidth / 2, 0, 2 * Math.PI);
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.fill();
+            
             e.preventDefault();
         }
 
@@ -1411,20 +1484,27 @@
             isDrawing = false;
         }
 
-        // Remove listeners antigos para evitar duplicação
-        canvas.replaceWith(canvas.cloneNode(true));
-        const newCanvas = document.getElementById(`canvas${id}`);
-
-        // Mouse events
-        newCanvas.addEventListener('mousedown', startDrawing);
-        newCanvas.addEventListener('mousemove', draw);
-        newCanvas.addEventListener('mouseup', stopDrawing);
-        newCanvas.addEventListener('mouseout', stopDrawing);
+        // Remove listeners antigos para evitar duplicação (boas práticas)
+        ['mousedown', 'mousemove', 'mouseup', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(event => {
+            canvas.removeEventListener(event, startDrawing);
+            canvas.removeEventListener(event, draw);
+            canvas.removeEventListener(event, stopDrawing);
+        });
         
-        // Touch events
-        newCanvas.addEventListener('touchstart', startDrawing);
-        newCanvas.addEventListener('touchmove', draw);
-        newCanvas.addEventListener('touchend', stopDrawing);
+        // Adiciona eventos (Mouse e Touch)
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        
+        canvas.addEventListener('touchstart', startDrawing);
+        canvas.addEventListener('touchmove', draw);
+        canvas.addEventListener('touchend', stopDrawing);
+        canvas.addEventListener('touchcancel', stopDrawing);
+
+        // Atualiza a variável global do canvas para referência
+        if (id === 'Motorista') window.canvasMotorista = canvas;
+        else if (id === 'Proprietario') window.canvasProprietario = canvas;
     }
 
     /** Limpa o Canvas de Assinatura */
@@ -1435,9 +1515,13 @@
         const ctx = canvas.getContext('2d');
         // Limpa o canvas (preenche com branco para garantir)
         ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Ajuste de Limpeza para a escala do DPR
+        const rect = canvas.getBoundingClientRect();
+        const displayWidth = rect.width;
+        const displayHeight = rect.height;
+        ctx.fillRect(0, 0, displayWidth, displayHeight); 
         
-        if (!skipAlert) alert(`Assinatura do ${type} limpa!`);
+        if (!skipAlert) console.log(`Assinatura do ${type} limpa!`);
     }
 
     /** Salva assinaturas e prepara a abertura do Recibo */
@@ -1486,85 +1570,217 @@
             window.acertoParaRecibo = acerto; // Armazena globalmente para PDF
         } catch (error) {
             console.error('Erro ao gerar recibo:', error);
-            alert('Erro ao carregar dados para o recibo.');
+            // alert('Erro ao carregar dados para o recibo.'); // Não usar alert
         }
     }
 
 
-    /** Gerar PDF do Recibo (simulação) */
+    /** Gerar PDF do Recibo (usando html2canvas) - CORRIGIDO PARA QUEBRA DE PÁGINA */
     function gerarReciboPDF() {
-        if (typeof window.jspdf === 'undefined') {
-            alert('Biblioteca jsPDF não carregada. Recurso indisponível.');
+        if (typeof html2canvas === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
+            console.error('Bibliotecas de PDF não carregadas. Recurso indisponível.');
             return;
         }
         
-        const doc = new jspdf.jsPDF();
-        const acerto = window.acertoParaRecibo;
+        const element = document.getElementById('reciboParaPDF');
+        const filename = `Recibo_${window.acertoParaRecibo.motorista}.pdf`;
 
-        doc.setFontSize(18);
-        doc.setTextColor(30, 64, 175); // Azul
-        doc.text("RECIBO DE COMISSÃO DE VIAGEM", 105, 20, null, null, "center");
-        
-        doc.setFontSize(12);
-        doc.setTextColor(55, 65, 81);
-        doc.text(`Empresa: ${localStorage.getItem("nomeEmpresa") || 'N/A'}`, 20, 35);
-        doc.text(`Data: ${formatDateBR(new Date().toISOString().split('T')[0])}`, 170, 35);
-        
-        doc.setDrawColor(200, 200, 200);
-        doc.line(20, 40, 190, 40); // Linha separadora
+        // Aumentar a escala para melhor qualidade em telas de alta resolução
+        html2canvas(element, { scale: 3 }).then(canvas => { 
+            const imgData = canvas.toDataURL('image/png');
+            // Formato A4: 210mm x 297mm (retrato)
+            const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            
+            // Largura da imagem no PDF: 190mm (20mm de margem total)
+            const imgWidth = 190; 
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+            
+            let heightLeft = imgHeight;
+            let position = 10; // Margem superior inicial (10mm)
+            
+            // Adiciona a primeira página
+            pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+            heightLeft -= (pdfHeight - position); // Subtrai o espaço já ocupado na primeira página
 
-        let y = 50;
-        doc.setFontSize(14);
-        doc.setTextColor(15, 23, 42);
+            // Adiciona páginas extras se o conteúdo for maior que uma página
+            while (heightLeft > 0) {
+                position = 10; // Nova margem superior para a próxima página
+                pdf.addPage();
+                
+                // O Y negativo na imagem é o quanto ela subiu (rolou)
+                // O 10 é a margem superior
+                pdf.addImage(imgData, 'PNG', 10, - (imgHeight - heightLeft), imgWidth, imgHeight); 
+                heightLeft -= (pdfHeight - position);
+            }
 
-        doc.text("Resumo da Viagem:", 20, y);
-        y += 8;
-        doc.text(`Motorista: ${acerto.motorista}`, 20, y);
-        doc.text(`Caminhão: ${acerto.caminhaoNome || 'N/A'}`, 100, y);
-        y += 8;
-        
-        const dataViagemNormalizada = toDate(acerto.dataViagem);
-        doc.text(`Data Viagem: ${dataViagemNormalizada ? formatDateBR(dataViagemNormalizada.toISOString().split('T')[0]) : '-'}`, 20, y);
-        y += 15;
-
-        doc.setFontSize(16);
-        doc.setTextColor(220, 38, 38); // Vermelho
-        doc.text(`VALOR PAGO (COMISSÃO): ${floatToCurrency(acerto.comissao || 0)}`, 105, y, null, null, "center");
-        y += 15;
-        
-        doc.setFontSize(10);
-        doc.setTextColor(55, 65, 81);
-        doc.text("Observações:", 20, y);
-        y += 5;
-        doc.text(acerto.observacoes || 'Nenhuma.', 20, y, { maxWidth: 170 });
-        y += 20;
-
-        // Adiciona assinaturas
-        if (acerto.assinaturaMotorista) {
-            doc.addImage(acerto.assinaturaMotorista, 'PNG', 30, y, 60, 20); // x, y, width, height
-        }
-        if (acerto.assinaturaProprietario) {
-            doc.addImage(acerto.assinaturaProprietario, 'PNG', 120, y, 60, 20); // x, y, width, height
-        }
-        y += 25;
-
-        doc.line(30, y, 90, y); // Linha para Ass Motorista
-        doc.line(120, y, 180, y); // Linha para Ass Proprietário
-        y += 5;
-        doc.text("Assinatura do Motorista", 60, y, null, null, "center");
-        doc.text("Assinatura do Proprietário", 150, y, null, null, "center");
-
-        doc.save(`Recibo_Comissao_${acerto.motorista}.pdf`);
+            pdf.save(filename);
+        }).catch(error => {
+            console.error('Erro ao gerar PDF do Recibo:', error);
+            // alert('Erro ao gerar PDF do recibo. Verifique o console.'); // Não usar alert
+        });
     }
 
-    // ----------------------------------------------------
-    // # LÓGICA DO CAIXA (ABA CAIXA)
-    // ----------------------------------------------------
-    
-    // API Key para o Gemini (deve ser vazia para o Canvas injetar)
-    const apiKey = "";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+    /** Gerar Relatório de Acertos (PDF) */
+    function gerarRelatorioAcertoPDF() {
+        if (typeof html2canvas === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
+            console.error('Bibliotecas de PDF não carregadas. Recurso indisponível.');
+            return;
+        }
 
+        // Título e Tabela (Desktop)
+        const titulo = document.createElement('h2');
+        titulo.textContent = 'Relatório de Acertos de Viagem';
+        titulo.style.textAlign = 'center';
+
+        const dataRange = `Período: ${document.getElementById('dataInicioAcerto').value || 'Início'} a ${document.getElementById('dataFimAcerto').value || 'Fim'}`;
+        const totalFrete = document.getElementById('totalFreteAcerto').textContent;
+        const totalComissao = document.getElementById('totalComissaoAcerto').textContent;
+        const totalSobra = document.getElementById('totalSobraAcerto').textContent;
+        
+        const totaisDiv = document.createElement('div');
+        totaisDiv.innerHTML = `
+            <p><strong>${dataRange}</strong></p>
+            <p>Total Frete: ${totalFrete} | Total Comissão: ${totalComissao} | **Total Sobra: ${totalSobra}**</p>
+        `;
+        totaisDiv.style.marginBottom = '10px';
+        totaisDiv.style.fontSize = '12px';
+
+        const tabelaOriginal = document.getElementById('acertosTable').closest('table');
+        
+        // Clona a tabela e remove as colunas de Ações para o PDF
+        const tabelaClone = tabelaOriginal.cloneNode(true);
+        // Remove a última coluna (Ações)
+        tabelaClone.querySelectorAll('tr').forEach(row => {
+            if (row.cells.length > 0) {
+                 row.deleteCell(row.cells.length - 1);
+            }
+        });
+        tabelaClone.querySelector('thead tr th:last-child').remove(); // Remove o cabeçalho Ações
+
+        // Cria um container temporário para renderizar o PDF
+        const tempContainer = document.createElement('div');
+        tempContainer.style.width = '1050px'; // Define uma largura fixa para o PDF (para simular desktop)
+        tempContainer.style.padding = '20px';
+        tempContainer.append(titulo, totaisDiv, tabelaClone);
+        
+        document.body.appendChild(tempContainer);
+        
+        html2canvas(tempContainer, { 
+            scale: 2,
+            windowWidth: 1200, // Força a largura de renderização
+            scrollY: -window.scrollY 
+        }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jspdf.jsPDF('l', 'mm', 'a4'); // 'l' para landscape (paisagem)
+            
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = 280; // Largura do conteúdo (A4 paisagem)
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 10;
+            
+            pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight);
+            heightLeft -= pdfHeight;
+            
+            // Adiciona páginas para tabelas muito longas (se necessário)
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight);
+                heightLeft -= pdfHeight;
+            }
+
+            pdf.save(`Relatorio_Acertos_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
+            
+            // Remove o container temporário
+            tempContainer.remove();
+        }).catch(error => {
+            console.error('Erro ao gerar PDF do Relatório:', error);
+            tempContainer.remove();
+        });
+    }
+
+    /** Gerar Relatório de Caixa (PDF) */
+    function gerarRelatorioCaixaPDF() {
+        if (typeof html2canvas === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
+            console.error('Bibliotecas de PDF não carregadas. Recurso indisponível.');
+            return;
+        }
+
+        // Título e Tabela (Desktop)
+        const titulo = document.createElement('h2');
+        titulo.textContent = 'Relatório de Movimentação de Caixa';
+        titulo.style.textAlign = 'center';
+
+        const totalEntradas = document.getElementById('totalEntradasCaixa').textContent;
+        const totalSaidas = document.getElementById('totalSaidasCaixa').textContent;
+        const saldoAtual = document.getElementById('saldoAtualCaixa').textContent;
+        
+        const totaisDiv = document.createElement('div');
+        totaisDiv.innerHTML = `
+            <p>Total Entradas: ${totalEntradas} | Total Saídas: ${totalSaidas} | **Saldo: ${saldoAtual}**</p>
+        `;
+        totaisDiv.style.marginBottom = '10px';
+        totaisDiv.style.fontSize = '12px';
+        
+        const tabelaOriginal = document.getElementById('caixaTable').closest('table');
+        
+        // Clona a tabela e remove as colunas de Ações para o PDF
+        const tabelaClone = tabelaOriginal.cloneNode(true);
+        // Remove a última coluna (Ações)
+        tabelaClone.querySelectorAll('tr').forEach(row => {
+            if (row.cells.length > 0) {
+                 row.deleteCell(row.cells.length - 1);
+            }
+        });
+        tabelaClone.querySelector('thead tr th:last-child').remove(); // Remove o cabeçalho Ações
+
+        // Cria um container temporário para renderizar o PDF
+        const tempContainer = document.createElement('div');
+        tempContainer.style.width = '1050px'; // Define uma largura fixa para o PDF (para simular desktop)
+        tempContainer.style.padding = '20px';
+        tempContainer.append(titulo, totaisDiv, tabelaClone);
+        
+        document.body.appendChild(tempContainer);
+        
+        html2canvas(tempContainer, { 
+            scale: 2,
+            windowWidth: 1200, // Força a largura de renderização
+            scrollY: -window.scrollY 
+        }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jspdf.jsPDF('l', 'mm', 'a4'); // 'l' para landscape (paisagem)
+            
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = 280; // Largura do conteúdo (A4 paisagem)
+            const imgHeight = canvas.height * imgWidth / canvas.width;
+            let heightLeft = imgHeight;
+            let position = 10;
+            
+            pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight);
+            heightLeft -= pdfHeight;
+            
+            // Adiciona páginas para tabelas muito longas (se necessário)
+            while (heightLeft >= 0) {
+                position = heightLeft - imgHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight);
+                heightLeft -= pdfHeight;
+            }
+
+            pdf.save(`Relatorio_Caixa_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
+            
+            // Remove o container temporário
+            tempContainer.remove();
+        }).catch(error => {
+            console.error('Erro ao gerar PDF do Relatório:', error);
+            tempContainer.remove();
+        });
+    }
 
     /** Chama o Gemini para sugerir uma categoria baseada na descrição */
     async function sugerirCategoria() {
@@ -1572,7 +1788,7 @@
         const categoriaInput = document.getElementById('categoriaCaixa');
 
         if (!descricao) {
-            alert("Por favor, preencha a Descrição para obter uma sugestão.");
+            console.error("Por favor, preencha a Descrição para obter uma sugestão.");
             return;
         }
 
@@ -1658,12 +1874,12 @@
     async function salvarLancamentoCaixa() {
         const tipo = document.getElementById('tipoCaixa').value;
         const valorTotal = currencyToFloat(document.getElementById('valorCaixa').value);
-        const data = document.getElementById('dataCaixa').value;
+        const data = document.getElementById('dataCaixa').value; // String YYYY-MM-DD
         const categoria = document.getElementById('categoriaCaixa').value.trim();
         const descricao = document.getElementById('descricaoCaixa').value.trim();
 
         if (valorTotal <= 0 || !data) {
-            alert('Preencha o Tipo, Valor e Data de Lançamento.');
+            console.error('Preencha o Tipo, Valor e Data de Lançamento!');
             return;
         }
 
@@ -1671,57 +1887,68 @@
         const isCheque = document.getElementById('isCheque').checked;
         const qtdParcelas = parseInt(document.getElementById('qtdParcelas').value) || 1;
 
-        if (tipo === 'saida' && (isBoleto || isCheque)) {
-            // Lançamento Parcelado
-            const valorParcela = valorTotal / qtdParcelas;
-            const lancamentos = [];
-            const tipoParcela = isBoleto ? 'vencimento' : 'apresentacao';
-            
-            for (let i = 0; i < qtdParcelas; i++) {
-                const dataParcelaStr = document.getElementById(`${tipoParcela}Parcela${i}`).value;
-                if (!dataParcelaStr) {
-                    alert(`Preencha a data da parcela ${i + 1}`);
-                    return;
+        // Converte a data de lançamento para Timestamp (centralizado)
+        const dataLancamentoTimestamp = firebase.firestore.Timestamp.fromDate(new Date(data + 'T12:00:00'));
+
+        try {
+            if (tipo === 'saida' && (isBoleto || isCheque)) {
+                // Lançamento Parcelado
+                const valorParcela = valorTotal / qtdParcelas;
+                const lancamentos = [];
+                const tipoParcela = isBoleto ? 'vencimento' : 'apresentacao';
+                
+                for (let i = 0; i < qtdParcelas; i++) {
+                    const dataParcelaStr = document.getElementById(`${tipoParcela}Parcela${i}`)?.value;
+                    
+                    if (!dataParcelaStr) {
+                         // Erro crítico: data de vencimento/apresentação não encontrada para a parcela
+                         console.error(`Erro: Data da parcela ${i + 1} não preenchida ou não encontrada.`);
+                         return;
+                    }
+
+                    lancamentos.push({
+                        tipo,
+                        valor: valorParcela,
+                        data: dataLancamentoTimestamp, // Data de Lançamento
+                        dataVencimento: firebase.firestore.Timestamp.fromDate(new Date(dataParcelaStr + 'T12:00:00')), // Data de Vencimento/Apresentação
+                        categoria: categoria || 'Despesa Parcelada',
+                        descricao: `${descricao || 'Despesa Parcelada'} (${i + 1}/${qtdParcelas})`,
+                        status: 'a pagar',
+                        parcela: `${i + 1}/${qtdParcelas}`,
+                        tipoDocumento: isBoleto ? 'Boleto' : 'Cheque',
+                        dataRegistro: firebase.firestore.FieldValue.serverTimestamp()
+                    });
                 }
-                lancamentos.push({
-                    tipo,
-                    valor: valorParcela,
-                    data: firebase.firestore.Timestamp.fromDate(new Date(data + 'T12:00:00')), // Data de Lançamento
-                    dataVencimento: firebase.firestore.Timestamp.fromDate(new Date(dataParcelaStr + 'T12:00:00')), // Data de Vencimento/Apresentação
-                    categoria,
-                    descricao: `${descricao || 'Lançamento Manual'} (${i + 1}/${qtdParcelas})`, // Adicionado fallback para descrição
-                    status: 'a vencer',
-                    parcela: `${i + 1}/${qtdParcelas}`,
-                    tipoDocumento: isBoleto ? 'Boleto' : 'Cheque',
-                    dataRegistro: firebase.firestore.FieldValue.serverTimestamp()
+
+                const batch = db.batch();
+                lancamentos.forEach(lancamento => {
+                    batch.set(db.collection("caixa").doc(), lancamento);
                 });
+                await batch.commit();
+                console.log('Lançamentos parcelados criados com sucesso!');
+
+            } else {
+                // Lançamento Simples (Entrada ou Saída à vista)
+                const lancamento = {
+                    tipo,
+                    valor: valorTotal,
+                    data: dataLancamentoTimestamp,
+                    categoria: categoria || (tipo === 'entrada' ? 'Receita Diversa' : 'Despesa à Vista'),
+                    descricao: descricao || (tipo === 'entrada' ? 'Entrada Manual' : 'Saída Manual'),
+                    dataVencimento: tipo === 'saida' ? dataLancamentoTimestamp : null, // Saída à vista = Vencimento é igual à Data de Lançamento
+                    status: tipo === 'entrada' ? 'recebido' : 'pago', // Se é à vista, assume que já está pago/recebido
+                    dataRegistro: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                await db.collection("caixa").add(lancamento);
+                console.log(`Lançamento de ${tipo} simples salvo com sucesso!`);
             }
 
-            const batch = db.batch();
-            lancamentos.forEach(lancamento => {
-                batch.set(db.collection("caixa").doc(), lancamento);
-            });
-            await batch.commit();
-            alert('Lançamentos parcelados criados com sucesso!');
+            limparCamposCaixa();
+            loadAllCaixaAndFilter();
 
-        } else {
-            // Lançamento Simples (Entrada ou Saída à vista)
-            const lancamento = {
-                tipo,
-                valor: valorTotal,
-                data: firebase.firestore.Timestamp.fromDate(new Date(data + 'T12:00:00')),
-                categoria,
-                descricao: descricao || 'Lançamento Manual', // Adicionado fallback para descrição
-                dataVencimento: tipo === 'saida' ? (data ? firebase.firestore.Timestamp.fromDate(new Date(data + 'T12:00:00')) : null) : null, // Saída à vista
-                status: tipo === 'entrada' ? 'recebido' : 'pago',
-                dataRegistro: firebase.firestore.FieldValue.serverTimestamp()
-            };
-            await db.collection("caixa").add(lancamento);
-            alert('Lançamento salvo com sucesso!');
+        } catch (error) {
+            console.error("Erro ao salvar lançamento manual:", error);
         }
-
-        limparCamposCaixa();
-        loadAllCaixaAndFilter();
     }
 
     /** Limpa campos do Caixa */
@@ -1865,10 +2092,10 @@
               
               // Botão Pagar/Estornar
               let btnPagar = '';
-              if (!isEntrada && it.status === 'a vencer') {
+              if (!isEntrada && it.status === 'a pagar') {
                   btnPagar = `<button onclick="mudarStatusCaixa('${it.id}', 'pago')" class="text-green-600 hover:text-green-900 mr-2 small-btn" title="Pagar">✅ Pagar</button>`;
               } else if (!isEntrada && it.status === 'pago') {
-                  btnPagar = `<button onclick="mudarStatusCaixa('${it.id}', 'a vencer')" class="text-yellow-600 hover:text-yellow-800 mr-2 small-btn" title="Estornar Pagamento">↩️ Estornar</button>`;
+                  btnPagar = `<button onclick="mudarStatusCaixa('${it.id}', 'a pagar')" class="text-yellow-600 hover:text-yellow-800 mr-2 small-btn" title="Estornar Pagamento">↩️ Estornar</button>`;
               }
 
               tr.className = `hover:bg-gray-100 ${isVencido ? 'bg-red-50' : ''}`;
@@ -1926,6 +2153,9 @@
 
     /** Mudar Status de Pagamento (Pagar/Estornar) */
     async function mudarStatusCaixa(lancamentoId, novoStatus) {
+        // Não usar confirm()
+        console.warn(`Tentando mudar status do lançamento ${lancamentoId} para ${novoStatus}.`);
+
         try {
             await db.collection("caixa").doc(lancamentoId).update({
                 status: novoStatus,
@@ -1933,25 +2163,26 @@
             });
             // Recarrega todos os dados e aplica o filtro
             loadAllCaixaAndFilter(); 
-            alert(`Lançamento ${novoStatus === 'pago' ? 'pago' : 'estornado'} com sucesso!`);
+            console.log(`Lançamento ${novoStatus === 'pago' ? 'pago' : 'estornado'} com sucesso!`);
         } catch (error) {
             console.error("Erro ao mudar status:", error);
-            alert("Erro ao realizar a operação.");
+            // alert("Erro ao realizar a operação."); // Não usar alert
         }
     }
 
 
     /** Excluir Lançamento */
     async function excluirLancamentoCaixa(lancamentoId) {
-        if (!confirm('Tem certeza que deseja excluir este lançamento do caixa?')) return;
+        // Não usar confirm()
+        console.warn(`Tentativa de excluir lançamento ${lancamentoId}. Excluindo...`);
         
         try {
             await db.collection("caixa").doc(lancamentoId).delete();
-            alert('Lançamento excluído com sucesso!');
+            console.log('Lançamento excluído com sucesso!');
             loadAllCaixaAndFilter();
         } catch (error) {
             console.error("Erro ao excluir lançamento:", error);
-            alert("Erro ao excluir lançamento. Verifique o console.");
+            // alert("Erro ao excluir lançamento. Verifique o console."); // Não usar alert
         }
     }
 
@@ -1963,7 +2194,7 @@
         try {
             const doc = await db.collection('caixa').doc(lancamentoId).get();
             if (!doc.exists) {
-                alert('Lançamento não encontrado!');
+                console.error('Lançamento não encontrado!');
                 return;
             }
             const lancamento = doc.data();
@@ -1993,7 +2224,7 @@
             document.getElementById('modalCaixa').style.display = "flex";
         } catch (error) {
             console.error('Erro ao buscar lançamento para edição:', error);
-            alert('Erro ao carregar dados para edição.');
+            // alert('Erro ao carregar dados para edição.'); // Não usar alert
         }
     }
 
@@ -2014,7 +2245,7 @@
         const dataVencimento = document.getElementById('editDataVencimento').value;
 
         if (valor <= 0 || !data) {
-            alert('Preencha os campos obrigatórios (Tipo, Valor e Data).');
+            console.error('Preencha os campos obrigatórios (Tipo, Valor e Data).');
             return;
         }
 
@@ -2036,12 +2267,12 @@
 
         try {
             await db.collection("caixa").doc(id).update(updates);
-            alert('Lançamento atualizado com sucesso!');
+            console.log('Lançamento atualizado com sucesso!');
             fecharModalCaixa();
             loadAllCaixaAndFilter();
         } catch (error) {
             console.error('Erro ao salvar edição:', error);
-            alert('Erro ao salvar edição do lançamento.');
+            // alert('Erro ao salvar edição do lançamento.'); // Não usar alert
         }
     }
 
@@ -2056,7 +2287,7 @@
             
             const dataVencNormalizada = normalizeToDate(vencimento);
             
-            // Verifica se é saída, está a vencer (ou não está pago) e o dia de vencimento é HOJE ou ANTES
+            // Verifica se é saída, está a pagar (ou não está pago) e o dia de vencimento é HOJE ou ANTES
             return l.tipo === 'saida' && 
                 dataVencNormalizada && 
                 dataVencNormalizada.getTime() <= hoje.getTime() && 
@@ -2106,7 +2337,7 @@
         const placa = document.getElementById('placaCaminhao').value.trim();
 
         if (!nome || !placa) {
-            alert('Preencha Nome e Placa do Caminhão.');
+            console.error('Preencha Nome e Placa do Caminhão.');
             return;
         }
 
@@ -2116,11 +2347,11 @@
             if (caminhaoEmEdicaoId) {
                 // Edição
                 await db.collection("caminhoes").doc(caminhaoEmEdicaoId).update(caminhaoData);
-                alert('Caminhão atualizado com sucesso!');
+                console.log('Caminhão atualizado com sucesso!');
             } else {
                 // Novo Cadastro
                 await db.collection("caminhoes").add(caminhaoData);
-                alert('Caminhão salvo com sucesso!');
+                console.log('Caminhão salvo com sucesso!');
             }
             
             limparCamposCaminhao();
@@ -2128,7 +2359,7 @@
             carregarOptionsCaminhao(); // Atualiza a lista de seleção
         } catch (error) {
             console.error("Erro ao salvar/atualizar caminhão:", error);
-            alert("Erro ao salvar/atualizar caminhão. Verifique o console.");
+            // alert("Erro ao salvar/atualizar caminhão. Verifique o console."); // Não usar alert
         }
     }
 
@@ -2137,7 +2368,7 @@
         try {
             const doc = await db.collection('caminhoes').doc(caminhaoId).get();
             if (!doc.exists) {
-                alert('Caminhão não encontrado!');
+                console.error('Caminhão não encontrado!');
                 return;
             }
             const caminhao = doc.data();
@@ -2151,7 +2382,7 @@
             window.scrollTo({ top: 0, behavior: 'smooth' }); // Volta para o formulário
         } catch (error) {
             console.error('Erro ao buscar caminhão para edição:', error);
-            alert('Erro ao carregar dados do caminhão para edição.');
+            // alert('Erro ao carregar dados do caminhão para edição.'); // Não usar alert
         }
     }
 
@@ -2194,17 +2425,18 @@
 
     /** Excluir Caminhão */
     async function excluirCaminhao(caminhaoId) {
-        if (!confirm('Tem certeza que deseja excluir este caminhão?')) return;
+        // Não usar confirm()
+        console.warn(`Tentativa de excluir caminhão ${caminhaoId}. Excluindo...`);
         
         try {
             await db.collection("caminhoes").doc(caminhaoId).delete(); 
             
-            alert('Caminhão excluído com sucesso!');
+            console.log('Caminhão excluído com sucesso!');
             carregarCaminhoes(); // Atualiza a tabela
             carregarOptionsCaminhao(); // Atualiza a lista de seleção
         } catch (error) {
             console.error("Erro ao excluir caminhão:", error);
-            alert("Erro ao excluir caminhão. Verifique o console.");
+            // alert("Erro ao excluir caminhão. Verifique o console."); // Não usar alert
         }
     }
 
@@ -2285,9 +2517,9 @@
         document.getElementById("nomeEmpresaHeader").innerText = nomeEmpresa;
         document.getElementById("novoNomeEmpresa").value = nomeEmpresa;
 
-        // Inicializa Canvas de Assinatura
-        initCanvas('Motorista');
-        initCanvas('Proprietario');
+        // Inicializa Canvas de Assinatura (para garantir que sejam configurados)
+        // initCanvas('Motorista'); // Não chamamos aqui, mas sim ao abrir o modal
+        // initCanvas('Proprietario');
 
         // Carrega dados iniciais
         carregarOptionsCaminhao();
@@ -2297,17 +2529,9 @@
     
     /** Inicialização ao carregar a página */
     window.onload = () => {
-        // Redimensiona o canvas para o tamanho do container ao iniciar
-        const motoristaCanvas = document.getElementById('canvasMotorista');
-        const proprietarioCanvas = document.getElementById('canvasProprietario');
-
-        if (motoristaCanvas && proprietarioCanvas) {
-            const parentWidth = motoristaCanvas.parentElement.clientWidth;
-            motoristaCanvas.width = parentWidth;
-            motoristaCanvas.height = 128; // Altura fixa
-            proprietarioCanvas.width = parentWidth;
-            proprietarioCanvas.height = 128; // Altura fixa
-        }
+        // Inicialização do Canvas em onload (importante para o redimensionamento inicial)
+        // O redimensionamento deve acontecer dentro de initCanvas() ao abrir o modal,
+        // mas as variáveis globais precisam ser inicializadas.
 
         // Login Persistente
         if (localStorage.getItem("usuarioLogado") === "true") {
