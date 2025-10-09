@@ -1,0 +1,2247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestão de Frotas e Caixa</title>
+    <!-- Tailwind CSS CDN para estilização moderna e responsiva -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos personalizados com foco na estética azul e max-width */
+        body {
+            background-color: #f3f4f6; /* Fundo cinza claro */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .app-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            min-height: 100vh;
+        }
+        .header-bg {
+            background-color: #1e40af; /* Azul forte */
+            color: white;
+        }
+        .nav-link.active {
+            border-bottom: 3px solid #60a5fa; /* Azul claro para aba ativa */
+            color: #60a5fa;
+            font-weight: 600;
+        }
+        .data-card {
+            background-color: #eff6ff; /* Fundo azul muito claro */
+            border-left: 4px solid #3b82f6; /* Borda azul */
+        }
+        .button-primary {
+            background-color: #2563eb;
+        }
+        .button-primary:hover {
+            background-color: #1d4ed8;
+        }
+        .button-danger {
+            background-color: #dc2626;
+        }
+        .button-danger:hover {
+            background-color: #b91c1c;
+        }
+        /* Estilo para a tabela de desdobramento (boletos/cheques) */
+        .parcela-table th, .parcela-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        /* Estilo para alerta de vencimento */
+        .alerta-vencimento {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+        /* Garantir que o login cubra tudo e comece como flex */
+        #loginPage {
+            z-index: 100; 
+            display: flex; /* Começa como flex para garantir a centralização */
+        }
+        /* Modais têm z-index mais alto que o login para aparecer por cima quando chamado */
+        .modal-overlay {
+            z-index: 1000; 
+        }
+        /* Estilos do Canvas de Assinatura */
+        .signature-canvas {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: crosshair;
+            background-color: #fff;
+        }
+        .small-btn {
+            @apply px-2 py-1 text-xs rounded transition duration-150;
+        }
+    </style>
+    <!-- Firebase V8 CDN (compatível com single HTML file) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+</head>
+<body>
+
+<!-- --------------------------------------- TELA DE LOGIN --------------------------------------- -->
+<!-- Z-index alto para garantir que fique por cima de qualquer elemento por padrão -->
+<div id="loginPage" class="fixed inset-0 bg-gray-100 items-center justify-center z-[100]"> 
+    <div class="bg-white p-8 rounded-lg shadow-xl w-96">
+        <h2 class="text-3xl font-bold mb-6 text-center text-blue-700">Login no Sistema</h2>
+        <div class="mb-4">
+            <label class="block text-gray-700 mb-2" for="usuario">Usuário</label>
+            <input type="text" id="usuario" value="master" class="w-full border border-gray-300 p-3 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="Usuário padrão: master">
+        </div>
+        <div class="mb-6 relative">
+            <label class="block text-gray-700 mb-2" for="senha">Senha</label>
+            <input type="password" id="senha" value="123mudar" class="w-full border border-gray-300 p-3 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="Senha padrão: 123mudar">
+            <button type="button" onclick="toggleSenha()" class="absolute right-3 top-[55%] text-gray-500 hover:text-blue-500">
+                <span id="toggleIcon">👁️</span>
+            </button>
+        </div>
+        <button onclick="handleLogin()" class="w-full button-primary text-white p-3 rounded font-semibold transition duration-200">
+            Entrar
+        </button>
+    </div>
+</div>
+
+<!-- --------------------------------------- TELA PRINCIPAL DO SISTEMA --------------------------------------- -->
+<!-- Inicia hidden para garantir que não apareça na tela de login -->
+<div id="appPage" class="app-container hidden">
+
+    <!-- Header do Sistema -->
+    <header class="header-bg p-4 flex justify-between items-center sticky top-0 z-50">
+        <div class="flex items-center">
+            <h1 id="nomeEmpresaHeader" class="text-xl font-bold">Nome da Empresa</h1>
+            <button onclick="abrirModalEmpresa()" class="ml-4 text-blue-300 hover:text-white" title="Alterar Nome da Empresa">
+                ✏️
+            </button>
+        </div>
+        <div class="flex items-center">
+            <button onclick="handleLogout()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition duration-200">
+                Sair
+            </button>
+        </div>
+    </header>
+
+    <!-- Navegação de Abas -->
+    <nav class="bg-white border-b border-gray-200 sticky top-[68px] z-40">
+        <div class="flex">
+            <button id="tabAcertos" onclick="changeTab('acertos')" class="nav-link px-6 py-3 text-gray-600 hover:text-blue-700 active">
+                📋 Acertos de Viagem
+            </button>
+            <button id="tabCaixa" onclick="changeTab('caixa')" class="nav-link px-6 py-3 text-gray-600 hover:text-blue-700">
+                📊 Entrada / Saída (Caixa)
+            </button>
+            <button id="tabCaminhao" onclick="changeTab('caminhao')" class="nav-link px-6 py-3 text-gray-600 hover:text-blue-700">
+                🚚 Cadastro de Caminhão
+            </button>
+        </div>
+    </nav>
+
+    <!-- Conteúdo das Abas -->
+    <main class="p-6">
+
+        <!-- ALERTA DE VENCIMENTOS (Fixado no topo da main) -->
+        <div id="alertaVencimentos" class="hidden alerta-vencimento p-3 rounded-lg mb-6 shadow">
+            <p class="font-semibold">🔔 **Alerta de Vencimentos!**</p>
+            <ul id="listaVencimentos" class="list-disc list-inside mt-1 text-sm">
+                <!-- Vencimentos serão injetados aqui -->
+            </ul>
+        </div>
+        
+        <!-- --------------------------------------- ABA: ACERTOS DE VIAGEM --------------------------------------- -->
+        <div id="acertos" class="tab-content">
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Registro de Acertos de Viagem</h2>
+            
+            <!-- Formulário de Acerto -->
+            <div class="bg-gray-50 p-6 rounded-lg shadow-md mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label class="block text-gray-700 mb-1">Motorista <span class="text-red-500">*</span></label>
+                        <input type="text" id="motoristaAcerto" class="w-full border p-2 rounded" placeholder="Nome do Motorista" required>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Caminhão <span class="text-red-500">*</span></label>
+                        <select id="caminhaoAcerto" class="w-full border p-2 rounded" required>
+                            <option value="">Selecione o Caminhão</option>
+                            <!-- Opções carregadas via JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Valor do Frete <span class="text-red-500">*</span></label>
+                        <input type="text" id="freteAcerto" oninput="formatAndCalculate('freteAcerto')" class="w-full border p-2 rounded text-right" placeholder="R$ 0,00" required>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Valor da Comissão <span class="text-red-500">*</span></label>
+                        <input type="text" id="comissaoAcerto" oninput="formatAndCalculate('comissaoAcerto')" class="w-full border p-2 rounded text-right" placeholder="R$ 0,00" required>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Forma de Pagamento</label>
+                        <input type="text" id="formaPagamentoAcerto" class="w-full border p-2 rounded" placeholder="Ex: PIX, Dinheiro">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Data da Viagem</label>
+                        <input type="date" id="dataViagemAcerto" class="w-full border p-2 rounded">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-gray-700 mb-1">Observações</label>
+                    <textarea id="observacoesAcerto" class="w-full border p-2 rounded h-20" placeholder="Detalhes da viagem"></textarea>
+                </div>
+
+                <!-- Despesas da Viagem -->
+                <h3 class="text-lg font-semibold mt-4 mb-2 text-gray-700">Despesas da Viagem</h3>
+                <div id="containerDespesas" class="space-y-2 mb-4">
+                    <!-- Despesas serão adicionadas aqui -->
+                </div>
+                <div class="flex space-x-2">
+                    <input type="text" id="descricaoDespesa" class="border p-2 rounded flex-grow" placeholder="Descrição da Despesa">
+                    <input type="text" id="valorDespesa" oninput="formatMoeda(this.id)" class="border p-2 rounded w-40 text-right" placeholder="R$ 0,00">
+                    <button onclick="adicionarDespesa()" class="bg-green-600 hover:bg-green-700 text-white p-2 rounded">
+                        ➕ Adicionar
+                    </button>
+                </div>
+
+                <!-- Sobra Calculada -->
+                <div class="mt-6 p-4 data-card flex justify-between items-center">
+                    <span class="font-bold text-lg text-blue-800">Sobra da Viagem:</span>
+                    <span id="sobraAcerto" class="font-bold text-xl text-green-700">R$ 0,00</span>
+                </div>
+
+                <!-- Botões de Ação -->
+                <div class="mt-6 flex space-x-4">
+                    <button onclick="salvarAcerto()" class="button-primary text-white p-3 rounded font-semibold flex-grow">
+                        💾 Salvar Acerto
+                    </button>
+                    <button onclick="limparCamposAcerto()" class="bg-gray-400 hover:bg-gray-500 text-white p-3 rounded font-semibold w-28">
+                        🧼 Limpar
+                    </button>
+                </div>
+            </div>
+
+            <hr class="my-6">
+
+            <!-- Relatório e Filtros de Acerto -->
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Acertos Registrados</h2>
+            
+            <div class="flex space-x-4 mb-4 items-end">
+                <div>
+                    <label class="block text-gray-700 mb-1">Data Início</label>
+                    <input type="date" id="dataInicioAcerto" class="border p-2 rounded">
+                </div>
+                <div>
+                    <label class="block text-gray-700 mb-1">Data Final</label>
+                    <input type="date" id="dataFimAcerto" class="border p-2 rounded">
+                </div>
+                <button onclick="filtrarAcertos()" class="button-primary text-white p-2 rounded h-10">
+                    🔎 Filtrar
+                </button>
+            </div>
+
+            <!-- Totais de Acerto -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="data-card p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">Total Frete:</p>
+                    <p id="totalFreteAcerto" class="text-lg font-bold text-blue-800">R$ 0,00</p>
+                </div>
+                <div class="data-card p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">Total Comissão:</p>
+                    <p id="totalComissaoAcerto" class="text-lg font-bold text-red-600">R$ 0,00</p>
+                </div>
+                <div class="data-card p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">Total Despesas:</p>
+                    <p id="totalDespesasAcerto" class="text-lg font-bold text-red-600">R$ 0,00</p>
+                </div>
+                <div class="data-card p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">Total Sobra:</p>
+                    <p id="totalSobraAcerto" class="text-lg font-bold text-green-700">R$ 0,00</p>
+                </div>
+            </div>
+
+            <!-- Tabela de Acertos -->
+            <div class="overflow-x-auto bg-white p-4 rounded-lg shadow">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 0)">Motorista</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Caminhão</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 2)">Frete</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 3)">Comissão</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 4)">Despesas</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 5)">Sobra">Sobra</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="acertosTable" class="bg-white divide-y divide-gray-200">
+                        <!-- Linhas de acerto serão injetadas aqui -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-4 flex justify-end">
+                <button onclick="gerarRelatorioAcertoPDF()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold">
+                    📤 Relatório PDF (Acertos)
+                </button>
+            </div>
+        </div>
+
+        <!-- --------------------------------------- ABA: ENTRADA / SAÍDA (CAIXA) --------------------------------------- -->
+        <div id="caixa" class="tab-content hidden">
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Controle de Caixa (Entrada / Saída)</h2>
+
+            <!-- Formulário de Lançamento Manual -->
+            <div class="bg-gray-50 p-6 rounded-lg shadow-md mb-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Novo Lançamento Manual</h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                    <div>
+                        <label class="block text-gray-700 mb-1">Tipo <span class="text-red-500">*</span></label>
+                        <select id="tipoCaixa" onchange="toggleVencimentoCheque()" class="w-full border p-2 rounded">
+                            <option value="entrada">Entrada</option>
+                            <option value="saida">Saída</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Valor <span class="text-red-500">*</span></label>
+                        <input type="text" id="valorCaixa" oninput="formatMoeda(this.id)" class="w-full border p-2 rounded text-right" placeholder="R$ 0,00">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Data Lançamento <span class="text-red-500">*</span></label>
+                        <input type="date" id="dataCaixa" class="w-full border p-2 rounded">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Categoria</label>
+                        <input type="text" id="categoriaCaixa" class="w-full border p-2 rounded" placeholder="Ex: Combustível, Salário">
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-gray-700 mb-1">Descrição</label>
+                    <textarea id="descricaoCaixa" class="w-full border p-2 rounded h-16" placeholder="Descrição detalhada do lançamento"></textarea>
+                </div>
+
+                <!-- Opções de Parcelamento (Saída) -->
+                <div id="opcoesParcela" class="hidden bg-white p-4 rounded-lg shadow-inner mb-4">
+                    <div class="flex space-x-6 items-center mb-4">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="isBoleto" onchange="toggleVencimentoCheque()" class="w-4 h-4 text-blue-600 border-gray-300 rounded">
+                            <label class="ml-2 text-gray-700">Boleto (Vencimento)</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="checkbox" id="isCheque" onchange="toggleVencimentoCheque()" class="w-4 h-4 text-blue-600 border-gray-300 rounded">
+                            <label class="ml-2 text-gray-700">Cheque (Apresentação)</label>
+                        </div>
+                        <div class="flex-grow">
+                            <label class="block text-gray-700 mb-1">Qtd. Parcelas</label>
+                            <input type="number" id="qtdParcelas" oninput="toggleVencimentoCheque()" value="1" min="1" class="w-full border p-2 rounded">
+                        </div>
+                        <div class="flex-grow">
+                            <label class="block text-gray-700 mb-1"><span id="labelVencimento">Vencimento da 1ª Parcela</span></label>
+                            <input type="date" id="dataVencimento" onchange="toggleVencimentoCheque()" class="w-full border p-2 rounded">
+                        </div>
+                    </div>
+                    
+                    <!-- Desdobramento de Parcelas -->
+                    <div id="desdobramentoParcelas" class="hidden mt-4">
+                        <h4 class="font-semibold mb-2">Detalhes das Parcelas:</h4>
+                        <div class="overflow-x-auto">
+                            <table class="parcela-table min-w-full text-sm">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Valor</th>
+                                        <th id="headerDataParcela">Vencimento</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabelaParcelas">
+                                    <!-- Parcelas serão injetadas aqui -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex space-x-4 mt-4">
+                    <button onclick="salvarLancamentoCaixa()" class="button-primary text-white p-3 rounded font-semibold flex-grow">
+                        💾 Salvar Lançamento
+                    </button>
+                    <!-- Novo botão para Sugestão de Categoria via Gemini -->
+                    <button onclick="sugerirCategoria()" class="bg-yellow-500 hover:bg-yellow-600 text-white p-3 rounded font-semibold w-40">
+                        ✨ Sugerir Categoria
+                    </button>
+                </div>
+            </div>
+
+            <hr class="my-6">
+
+            <!-- Filtros de Caixa -->
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Filtros e Relatórios</h3>
+            <div class="bg-white p-4 rounded-lg shadow mb-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                    <!-- Filtro por Mês (Checkbox e Mês) -->
+                    <div class="col-span-2 flex items-end space-x-4">
+                        <div>
+                            <label class="block text-gray-700 mb-1">Mês de Análise</label>
+                            <input type="month" id="filtroMes" class="border p-2 rounded w-40">
+                        </div>
+                        <div class="flex items-center h-10">
+                            <input type="checkbox" id="filtroTipoRecebimento" class="w-4 h-4 text-blue-600 border-gray-300 rounded">
+                            <label class="ml-2 text-gray-700">Recebimentos/Realizado</label>
+                        </div>
+                        <div class="flex items-center h-10">
+                            <input type="checkbox" id="filtroTipoVencimento" class="w-4 h-4 text-blue-600 border-gray-300 rounded">
+                            <label class="ml-2 text-gray-700">Vencimentos/Pagamentos</label>
+                        </div>
+                    </div>
+                    
+                    <!-- Filtro por Data Personalizada -->
+                    <div class="col-span-2 grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-gray-700 mb-1">Data Início</label>
+                            <input type="date" id="dataInicioCaixa" class="w-full border p-2 rounded">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-1">Data Fim</label>
+                            <input type="date" id="dataFimCaixa" class="w-full border p-2 rounded">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4 flex space-x-4">
+                    <button id="btnAplicarFiltros" onclick="filtrarCaixa()" class="button-primary text-white p-2 rounded flex-grow">
+                        🔎 Aplicar Filtros
+                    </button>
+                    <button onclick="gerarRelatorioCaixaPDF()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold">
+                        📤 Relatório PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- Totais e Saldo -->
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="data-card p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">Total Entradas (Mês/Período):</p>
+                    <p id="totalEntradasCaixa" class="text-lg font-bold text-green-700">R$ 0,00</p>
+                </div>
+                <div class="data-card p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">Total Saídas (Vencidas/Pagas):</p>
+                    <p id="totalSaidasCaixa" class="text-lg font-bold text-red-600">R$ 0,00</p>
+                </div>
+                <div class="data-card p-3 rounded-lg">
+                    <p class="text-sm text-gray-600">Saldo no Mês/Período:</p>
+                    <p id="saldoAtualCaixa" class="text-lg font-bold text-blue-800">R$ 0,00</p>
+                </div>
+            </div>
+
+            <!-- Tabela de Lançamentos -->
+            <div class="overflow-x-auto bg-white p-4 rounded-lg shadow">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('caixaTable', 0)">Data</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('caixaTable', 3)">Valor</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="caixaTable" class="bg-white divide-y divide-gray-200">
+                        <!-- Lançamentos serão injetados aqui -->
+                        <tr><td colspan="6" class="text-center py-4">Carregando dados...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+        <!-- --------------------------------------- ABA: CADASTRO DE CAMINHÃO --------------------------------------- -->
+        <div id="caminhao" class="tab-content hidden">
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Cadastro de Caminhões</h2>
+
+            <!-- Formulário de Cadastro de Caminhão -->
+            <div class="bg-gray-50 p-6 rounded-lg shadow-md mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-gray-700 mb-1">Nome do Caminhão <span class="text-red-500">*</span></label>
+                        <input type="text" id="nomeCaminhao" class="w-full border p-2 rounded" placeholder="Ex: Volvo FH 540" required>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Placa do Caminhão (Brasil) <span class="text-red-500">*</span></label>
+                        <input type="text" id="placaCaminhao" oninput="formatPlaca(this)" maxlength="8" class="w-full border p-2 rounded uppercase" placeholder="AAA-1234 (Mercosul: AAA1B23)">
+                    </div>
+                </div>
+                <button onclick="salvarCaminhao()" class="button-primary text-white p-3 rounded font-semibold w-full">
+                    💾 Salvar Caminhão
+                </button>
+            </div>
+
+            <hr class="my-6">
+
+            <!-- Tabela de Caminhões -->
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Caminhões Cadastrados</h3>
+            <div class="overflow-x-auto bg-white p-4 rounded-lg shadow">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Placa</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="caminhoesTable" class="bg-white divide-y divide-gray-200">
+                        <!-- Caminhões serão injetados aqui -->
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+    </main>
+</div>
+
+<!-- --------------------------------------- MODAIS --------------------------------------- -->
+
+<!-- Modal: Alterar Nome da Empresa -->
+<div id="modalEmpresa" class="modal-overlay hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-96 shadow-xl">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">✏️ Alterar Nome da Empresa</h3>
+            <button onclick="fecharModalEmpresa()" class="text-gray-500 hover:text-red-500">✖</button>
+        </div>
+        <input id="novoNomeEmpresa" type="text" placeholder="Digite o novo nome" class="w-full border rounded p-3 mb-4">
+        <button onclick="salvarNomeEmpresa()" class="button-primary text-white px-4 py-2 rounded w-full">
+            Salvar
+        </button>
+    </div>
+</div>
+
+<!-- Modal: Resumo Detalhado da Viagem -->
+<div id="modalResumoViagem" class="modal-overlay hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center">
+    <div class="bg-white rounded-lg p-8 w-11/12 max-w-lg shadow-xl">
+        <div class="flex justify-between items-center mb-6 border-b pb-2">
+            <h3 class="text-xl font-bold text-blue-700">👁️ Resumo Detalhado da Viagem</h3>
+            <button onclick="fecharModalResumoViagem()" class="text-gray-500 hover:text-red-500">✖</button>
+        </div>
+        
+        <div id="resumoViagemContent" class="space-y-2 text-gray-700 text-sm">
+            <p><strong>Data:</strong> <span id="resumoData"></span></p>
+            <p><strong>Motorista:</strong> <span id="resumoMotorista"></span></p>
+            <p><strong>Caminhão:</strong> <span id="resumoCaminhao"></span></p>
+            <p><strong>Frete:</strong> <span id="resumoFrete" class="font-bold text-blue-700"></span></p>
+            <p><strong>Comissão:</strong> <span id="resumoComissao" class="font-bold text-red-600"></span></p>
+            <p><strong>Forma de Pagamento:</strong> <span id="resumoFormaPagamento"></span></p>
+            
+            <div class="mt-4 pt-4 border-t">
+                <h4 class="font-bold mb-1">Despesas:</h4>
+                <ul id="resumoListaDespesas" class="list-disc space-y-1 text-xs pl-4">
+                    <!-- Despesas Detalhadas aqui -->
+                </ul>
+                <p class="mt-2 text-sm"><strong>Total Despesas:</strong> <span id="resumoTotalDespesas" class="font-bold text-red-600"></span></p>
+            </div>
+
+            <div class="mt-4 pt-4 border-t">
+                <p class="text-lg"><strong>SOBRA:</strong> <span id="resumoSobra" class="font-bold text-green-700"></span></p>
+            </div>
+
+            <p class="mt-4 text-xs italic">Observações: <span id="resumoObservacoes"></span></p>
+        </div>
+
+        <button onclick="fecharModalResumoViagem()" class="mt-6 bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded w-full">
+            OK
+        </button>
+    </div>
+</div>
+
+<!-- Modal: Assinaturas para Recibo -->
+<div id="modalAssinaturaRecibo" class="modal-overlay hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-11/12 max-w-2xl shadow-xl">
+        <div class="flex justify-between items-center mb-6 border-b pb-2">
+            <h3 class="text-xl font-bold text-blue-700">✍️ Assinaturas para o Recibo</h3>
+            <button onclick="fecharModalAssinaturaRecibo()" class="text-gray-500 hover:text-red-500">✖</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-gray-700 mb-2">Assinatura do Motorista:</label>
+                <canvas id="canvasMotorista" class="signature-canvas w-full h-32"></canvas>
+                <button onclick="limparAssinatura('Motorista')" class="button-danger text-white px-4 py-2 rounded w-full mt-2">
+                    <span class="mr-1">🧼</span> Limpar Assinatura
+                </button>
+            </div>
+            <div>
+                <label class="block text-gray-700 mb-2">Assinatura do Proprietário:</label>
+                <canvas id="canvasProprietario" class="signature-canvas w-full h-32"></canvas>
+                <button onclick="limparAssinatura('Proprietario')" class="button-danger text-white px-4 py-2 rounded w-full mt-2">
+                    <span class="mr-1">🧼</span> Limpar Assinatura
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-6 flex space-x-4">
+            <button onclick="salvarAssinaturasEGerarRecibo()" class="button-primary text-white p-3 rounded font-semibold flex-grow">
+                💾 Salvar Assinaturas e Gerar Recibo
+            </button>
+            <button onclick="fecharModalAssinaturaRecibo()" class="bg-gray-400 hover:bg-gray-500 text-white p-3 rounded font-semibold w-28">
+                Cancelar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Recibo de Acerto (para visualização final/PDF) -->
+<div id="modalRecibo" class="modal-overlay hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center">
+    <div class="bg-white rounded-lg p-8 w-[500px] shadow-xl">
+        <div class="flex justify-between items-center mb-6 border-b pb-2">
+            <h3 class="text-xl font-bold text-blue-700">📄 Recibo de Acerto</h3>
+            <button onclick="fecharModalRecibo()" class="text-gray-500 hover:text-red-500">✖</button>
+        </div>
+        
+        <div id="reciboContent" class="space-y-3 text-gray-700">
+            <!-- Conteúdo do recibo será injetado aqui -->
+            <p><strong>Empresa:</strong> <span id="reciboEmpresa"></span></p>
+            <p><strong>Motorista:</strong> <span id="reciboMotorista"></span></p>
+            <p><strong>Caminhão:</strong> <span id="reciboCaminhao"></span></p>
+            <p><strong>Data da Viagem:</strong> <span id="reciboData"></span></p>
+            <p><strong>Valor da Comissão:</strong> <span id="reciboComissao" class="font-bold text-red-600"></span></p>
+            <p><strong>Observações:</strong> <span id="reciboObservacoes"></span></p>
+            
+            <!-- Assinaturas injetadas aqui -->
+            <div class="mt-8 pt-8 border-t border-dashed">
+                <div class="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                        <img id="reciboAssMotorista" class="w-full h-16 border-b border-gray-400 object-contain mx-auto mb-1" src="">
+                        <p class="text-sm">Assinatura do Motorista</p>
+                    </div>
+                    <div>
+                        <img id="reciboAssProprietario" class="w-full h-16 border-b border-gray-400 object-contain mx-auto mb-1" src="">
+                        <p class="text-sm">Assinatura do Proprietário</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-4 border-t border-dashed">
+                <p class="text-center italic text-sm">Comprovante gerado eletronicamente em <span id="reciboDataGeracao"></span></p>
+            </div>
+        </div>
+
+        <button onclick="gerarReciboPDF()" class="mt-6 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">
+            Imprimir Recibo
+        </button>
+    </div>
+</div>
+
+<!-- Modal: Visualizar/Editar Lançamento (Caixa) -->
+<div id="modalCaixa" class="modal-overlay hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center">
+    <div class="bg-white rounded-lg p-6 w-[700px] shadow-xl">
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+            <h3 class="text-xl font-bold text-blue-700" id="caixaModalTitle">Editar Lançamento</h3>
+            <button onclick="fecharModalCaixa()" class="text-gray-500 hover:text-red-500">✖</button>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4 mb-4">
+            <div><label class="block text-gray-700 mb-1">Tipo</label><select id="editTipoCaixa" class="w-full border p-2 rounded" onchange="toggleEditVencimentoCheque()"><option value="entrada">Entrada</option><option value="saida">Saída</option></select></div>
+            <div><label class="block text-gray-700 mb-1">Valor</label><input type="text" id="editValorCaixa" oninput="formatMoeda(this.id)" class="w-full border p-2 rounded text-right"></div>
+            <div><label class="block text-gray-700 mb-1">Data Lançamento</label><input type="date" id="editDataCaixa" class="w-full border p-2 rounded"></div>
+            <div><label class="block text-gray-700 mb-1">Categoria</label><input type="text" id="editCategoriaCaixa" class="w-full border p-2 rounded"></div>
+        </div>
+        <div class="mb-4">
+            <label class="block text-gray-700 mb-1">Descrição</label>
+            <textarea id="editDescricaoCaixa" class="w-full border p-2 rounded h-16"></textarea>
+        </div>
+        
+        <!-- Edição de Parcelas (Simplificada) -->
+        <div id="editOpcoesParcela" class="hidden bg-gray-100 p-4 rounded-lg shadow-inner mb-4">
+            <h4 class="font-semibold mb-2">Detalhes da Parcela <span id="editParcAtual">1</span> de <span id="editParcTotal">1</span>:</h4>
+            <div class="flex space-x-4">
+                <div class="flex-grow">
+                    <label class="block text-gray-700 mb-1" id="editLabelVencimento">Vencimento/Apresentação</label>
+                    <input type="date" id="editDataVencimento" class="w-full border p-2 rounded">
+                </div>
+            </div>
+            <div class="mt-2 text-sm text-red-600">
+                Para alterar o desdobramento de parcelas, use a função de exclusão e refaça o lançamento.
+            </div>
+        </div>
+
+        <input type="hidden" id="lancamentoIdCaixa">
+        <button onclick="salvarEdicaoCaixa()" class="button-primary text-white p-3 rounded font-semibold w-full mt-4">
+            Salvar Edição
+        </button>
+    </div>
+</div>
+
+
+<!-- --------------------------------------- SCRIPTS --------------------------------------- -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+    // ** VARIÁVEIS GLOBAIS FIREBASE **
+    const firebaseConfig = {
+        apiKey: "AIzaSyAdz_cTwg0N97wGIT4juTl1OXs3-HJY0X8",
+        authDomain: "montero-web.firebaseapp.com",
+        projectId: "montero-web",
+        storageBucket: "montero-web.firebasestorage.app",
+        messagingSenderId: "673171025883",
+        appId: "1:673171025883:web:8e845ea1460792e54bc1fe",
+        measurementId: "G-TVDL4P5J6E"
+    };
+
+    // Inicializa Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // ** VARIÁVEIS GLOBAIS DO SISTEMA **
+    let despesasViagem = [];
+    let acertoEmEdicaoId = null;
+    let lancamentoEmEdicaoId = null;
+    let canvasMotorista, ctxMotorista, isDrawingMotorista = false;
+    let canvasProprietario, ctxProprietario, isDrawingProprietario = false;
+    let acertoAtualData = null; // Para armazenar dados do acerto para o resumo/recibo
+    window.caixaItems = []; // Array global para armazenar todos os itens do caixa
+    
+
+    // ----------------------------------------------------
+    // # FUNÇÕES DE UTILIDADE E FORMATAÇÃO
+    // ----------------------------------------------------
+    
+    // ----------------- Helpers (Início do bloco) -----------------
+    
+    function parseNumber(value) {
+      if (value === null || value === undefined) return 0;
+      if (typeof value === 'number') return value;
+      let s = String(value).trim();
+      // remove R$ e espaços
+      s = s.replace(/[R$\s]/g,'');
+      // se tem ponto e vírgula, trata milhares e decimais
+      if (s.indexOf('.') > -1 && s.indexOf(',') > -1) {
+        s = s.replace(/\./g,'').replace(',', '.');
+      } else {
+        s = s.replace(',', '.');
+      }
+      const n = parseFloat(s);
+      return isNaN(n) ? 0 : n;
+    }
+    
+    function parseLocalDateFromInput(value) {
+      // value esperado "YYYY-MM-DD" (input type=date)
+      if (!value) return null;
+      if (typeof value !== 'string') {
+        const d = new Date(value);
+        return isNaN(d) ? null : d;
+      }
+      const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (m) return new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
+      // fallback
+      const d = new Date(value);
+      return isNaN(d) ? null : d;
+    }
+    
+    function toDate(v) {
+      if (!v) return null;
+      // Firestore Timestamp
+      if (typeof v === 'object' && typeof v.toDate === 'function') {
+        try { return v.toDate(); } catch(e) { /* fallback */ }
+      }
+      // epoch number
+      if (typeof v === 'number') return new Date(v);
+      // string ISO or YYYY-MM-DD or dd/mm/yyyy
+      if (typeof v === 'string') {
+        const s = v.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return parseLocalDateFromInput(s);
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+          const [d,m,y] = s.split('/');
+          return new Date(parseInt(y,10), parseInt(m,10)-1, parseInt(d,10));
+        }
+        const d = new Date(s);
+        if (!isNaN(d)) return d;
+        return null;
+      }
+      // Date object?
+      if (v instanceof Date) return v;
+      return null;
+    }
+    
+    function startOfDay(d) { if(!d) return null; const r = new Date(d); r.setHours(0,0,0,0); return r; }
+    function endOfDay(d)   { if(!d) return null; const r = new Date(d); r.setHours(23,59,59,999); return r; }
+    
+    function formatBRL(v){ try { return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0); } catch(e) { return 'R$ ' + (Math.round((v||0)*100)/100).toFixed(2); } }
+    
+    function inRange(date, start, end) {
+      if (!date) return false;
+      if (start && date < start) return false;
+      if (end && date > end) return false;
+      return true;
+    }
+    
+    // NOVO HELPER: Normaliza data para comparação (zera hora/minuto/segundo)
+    function normalizeToDate(date) {
+        if (!date) return null;
+        const d = toDate(date); // Usa a função toDate existente para converter
+        if (!d || isNaN(d)) return null;
+        d.setHours(0, 0, 0, 0); // zera hora, minuto e segundo
+        return d;
+    }
+
+
+    /** Formata número para moeda BRL em tempo real */
+    function formatMoeda(elementId) {
+        const input = document.getElementById(elementId);
+        let value = input.value.replace(/\D/g, ""); // Remove tudo que não é dígito
+        
+        if (value.length > 0) {
+            value = (parseInt(value) / 100).toFixed(2).replace(".", ",");
+            value = value.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+            input.value = "R$" + value;
+        } else {
+            input.value = "";
+        }
+        // Dispara cálculo automático se for campo de acerto
+        if (elementId === 'freteAcerto' || elementId === 'comissaoAcerto') {
+            calcularSobra();
+        }
+    }
+
+    /** Dispara o cálculo de sobra após formatação de moeda */
+    function formatAndCalculate(elementId) {
+        formatMoeda(elementId);
+        calcularSobra();
+    }
+
+    /** Converte string de moeda BRL (R$ 1.234,56) para float (1234.56) */
+    function currencyToFloat(currency) {
+        if (!currency) return 0;
+        // Tenta remover R$, pontos de milhar e substitui vírgula por ponto decimal
+        return parseNumber(currency);
+    }
+    
+    /** Formata float (1234.56) para string BRL (R$ 1.234,56) */
+    function floatToCurrency(float) {
+        // Se o float for NaN, retorna R$ 0,00 para evitar R$ NaN
+        if (isNaN(float)) return "R$ 0,00"; 
+        return formatBRL(float);
+    }
+    
+    /** Formata data YYYY-MM-DD para DD/MM/YYYY */
+    function formatDateBR(dateString) {
+        if (!dateString) return '';
+        // Assumindo que a entrada é YYYY-MM-DD
+        const parts = dateString.split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+        return dateString;
+    }
+
+    /** Formata placa de carro (AAA1234, AAAB123) */
+    function formatPlaca(input) {
+        let value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        let formatted = '';
+        if (value.length > 3) {
+            formatted = value.substring(0, 3);
+            // Adiciona hífen para padrão antigo (AAA-1234) ou Mercosul (AAA1B23)
+            if (value.length >= 7) {
+                 formatted += '-' + value.substring(3, 7);
+            } else if (value.length > 3) {
+                 formatted += '-' + value.substring(3);
+            }
+        } else {
+            formatted = value;
+        }
+        input.value = formatted;
+    }
+
+
+    // ----------------------------------------------------
+    // # FUNÇÕES DE TELA (LOGIN, TABS, MODAIS)
+    // ----------------------------------------------------
+
+    /** Login Fixo com localStorage */
+    function handleLogin() {
+        const usuario = document.getElementById("usuario").value;
+        const senha = document.getElementById("senha").value;
+
+        if (usuario === "master" && senha === "123mudar") {
+            localStorage.setItem("usuarioLogado", "true");
+            document.getElementById("loginPage").style.display = "none";
+            document.getElementById("appPage").classList.remove("hidden");
+            // Inicia o carregamento dos dados após o login
+            initSystem(); 
+        } else {
+            alert("Usuário ou senha inválidos!");
+        }
+    }
+
+    /** Logout */
+    function handleLogout() {
+        localStorage.removeItem("usuarioLogado");
+        document.getElementById("loginPage").style.display = "flex";
+        document.getElementById("appPage").classList.add("hidden");
+    }
+
+    /** Exibir/Ocultar Senha */
+    function toggleSenha() {
+        const senhaInput = document.getElementById("senha");
+        const iconSpan = document.getElementById("toggleIcon");
+        if (senhaInput.type === "password") {
+            senhaInput.type = "text";
+            iconSpan.textContent = "🙈";
+        } else {
+            senhaInput.type = "password";
+            iconSpan.textContent = "👁️";
+        }
+    }
+
+    /** Troca de Abas */
+    function changeTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+        document.getElementById(tabName).classList.remove('hidden');
+
+        document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+        document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
+
+        // Recarrega dados específicos da aba
+        if (tabName === 'acertos') carregarAcertos();
+        if (tabName === 'caixa') loadAllCaixaAndFilter(); // Chamada principal de carga do caixa
+        if (tabName === 'caminhao') carregarCaminhoes();
+    }
+
+    /** Modal Empresa */
+    function abrirModalEmpresa() {
+        document.getElementById("modalEmpresa").classList.remove("hidden");
+        document.getElementById("modalEmpresa").style.display = "flex";
+    }
+    function fecharModalEmpresa() {
+        document.getElementById("modalEmpresa").classList.add("hidden");
+        document.getElementById("modalEmpresa").style.display = "none";
+    }
+    function salvarNomeEmpresa() {
+        const novoNome = document.getElementById("novoNomeEmpresa").value;
+        if (novoNome.trim() !== "") {
+            localStorage.setItem("nomeEmpresa", novoNome);
+            document.getElementById("nomeEmpresaHeader").innerText = novoNome;
+            fecharModalEmpresa();
+        }
+    }
+
+    /** Modal Recibo */
+    function fecharModalRecibo() {
+        document.getElementById('modalRecibo').classList.add('hidden');
+        document.getElementById('modalRecibo').style.display = "none";
+    }
+
+    /** Modal Resumo Viagem */
+    function fecharModalResumoViagem() {
+        document.getElementById('modalResumoViagem').classList.add('hidden');
+        document.getElementById('modalResumoViagem').style.display = "none";
+    }
+    
+    /** Modal Assinatura */
+    function fecharModalAssinaturaRecibo() {
+        document.getElementById('modalAssinaturaRecibo').classList.add('hidden');
+        document.getElementById('modalAssinaturaRecibo').style.display = "none";
+    }
+
+    // ----------------------------------------------------
+    // # LÓGICA DO ACERTO DE VIAGEM (ABA ACERTOS)
+    // ----------------------------------------------------
+
+    /** Adiciona despesa à lista temporária */
+    function adicionarDespesa() {
+        const descricao = document.getElementById('descricaoDespesa').value.trim();
+        const valorStr = document.getElementById('valorDespesa').value;
+        const valor = currencyToFloat(valorStr);
+
+        if (descricao && valor > 0) {
+            despesasViagem.push({ descricao, valor });
+            renderizarDespesas();
+            calcularSobra();
+            document.getElementById('descricaoDespesa').value = '';
+            document.getElementById('valorDespesa').value = '';
+        } else {
+            alert('Preencha a descrição e o valor da despesa.');
+        }
+    }
+
+    /** Renderiza a lista de despesas na tela */
+    function renderizarDespesas() {
+        const container = document.getElementById('containerDespesas');
+        container.innerHTML = despesasViagem.map((d, index) => `
+            <div class="flex justify-between items-center bg-white p-3 rounded border">
+                <span>${d.descricao}</span>
+                <div class="flex items-center space-x-3">
+                    <span class="font-semibold text-red-600">${floatToCurrency(d.valor)}</span>
+                    <button onclick="excluirDespesa(${index})" class="text-red-500 hover:text-red-700">
+                        ❌
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    /** Exclui despesa da lista temporária */
+    function excluirDespesa(index) {
+        despesasViagem.splice(index, 1);
+        renderizarDespesas();
+        calcularSobra();
+    }
+
+    /** Calcula a Sobra em tempo real */
+    function calcularSobra() {
+        const frete = currencyToFloat(document.getElementById('freteAcerto').value);
+        const comissao = currencyToFloat(document.getElementById('comissaoAcerto').value);
+        const totalDespesas = despesasViagem.reduce((sum, d) => sum + d.valor, 0);
+
+        const sobra = frete - comissao - totalDespesas;
+        document.getElementById('sobraAcerto').textContent = floatToCurrency(sobra);
+    }
+
+    /** Salva ou Edita Acerto e Lança Automaticamente no Caixa */
+    async function salvarAcerto() {
+        const motorista = document.getElementById('motoristaAcerto').value.trim();
+        const caminhaoId = document.getElementById('caminhaoAcerto').value;
+        const frete = currencyToFloat(document.getElementById('freteAcerto').value);
+        const comissao = currencyToFloat(document.getElementById('comissaoAcerto').value);
+        const formaPagamento = document.getElementById('formaPagamentoAcerto').value.trim();
+        const observacoes = document.getElementById('observacoesAcerto').value.trim();
+        const dataViagem = document.getElementById('dataViagemAcerto').value;
+        const sobra = currencyToFloat(document.getElementById('sobraAcerto').textContent);
+
+        if (!motorista || !caminhaoId || frete <= 0 || comissao < 0 || !dataViagem) {
+            alert('Preencha Motorista, Caminhão, Frete, Comissão e Data de Viagem!');
+            return;
+        }
+
+        const caminhaoNome = document.getElementById('caminhaoAcerto').options[document.getElementById('caminhaoAcerto').selectedIndex].text;
+        const totalDespesas = despesasViagem.reduce((sum, d) => sum + d.valor, 0);
+
+        const acertoData = {
+            motorista,
+            caminhaoId,
+            caminhaoNome,
+            frete,
+            comissao,
+            formaPagamento,
+            observacoes,
+            dataViagem: firebase.firestore.Timestamp.fromDate(new Date(dataViagem + 'T12:00:00')),
+            despesas: despesasViagem,
+            totalDespesas,
+            sobra,
+            dataRegistro: firebase.firestore.FieldValue.serverTimestamp(),
+            status: 'concluido'
+        };
+
+        try {
+            if (acertoEmEdicaoId) {
+                // 1. Edição de Acerto
+                await db.collection("acertos").doc(acertoEmEdicaoId).update(acertoData);
+                await atualizarLancamentoCaixaAcerto(motorista, sobra, dataViagem);
+                alert('Acerto atualizado e Sobra no Caixa sincronizada com sucesso!');
+            } else {
+                // 2. Novo Acerto
+                const docRef = await db.collection("acertos").add(acertoData);
+                // 3. Lançamento Automático da Sobra no Caixa
+                if (sobra > 0) {
+                    await lancarSobraNoCaixa(docRef.id, motorista, sobra, dataViagem);
+                }
+                alert('Acerto salvo e Sobra de Viagem lançada no Caixa!');
+            }
+            
+            limparCamposAcerto();
+            carregarAcertos(); // Atualiza a tabela
+            loadAllCaixaAndFilter(); // Atualiza o caixa
+        } catch (error) {
+            console.error("Erro ao salvar acerto:", error);
+            alert("Erro ao salvar acerto. Verifique o console.");
+        }
+    }
+
+    /** Lançamento Automático da Sobra no Caixa */
+    async function lancarSobraNoCaixa(acertoId, motorista, sobra, dataViagem) {
+        const lancamentoData = {
+            tipo: 'entrada',
+            valor: sobra,
+            data: firebase.firestore.Timestamp.fromDate(new Date(dataViagem + 'T12:00:00')),
+            descricao: `Sobra Viagem (Acerto: ${acertoId.substring(0, 6)}...) - Motorista: ${motorista}`,
+            categoria: 'Sobra Viagem',
+            status: 'recebido', // Sobra de Acerto sempre entra como recebida
+            origemAcertoId: acertoId,
+            dataRegistro: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        await db.collection("caixa").add(lancamentoData);
+    }
+
+    /** Atualiza Lançamento de Caixa após Edição de Acerto */
+    async function atualizarLancamentoCaixaAcerto(acertoId, motorista, novaSobra, novaDataViagem) {
+        const caixaQuery = await db.collection("caixa").where("origemAcertoId", "==", acertoId).get();
+        if (!caixaQuery.empty) {
+            const docRef = caixaQuery.docs[0].ref;
+            const novaDescricao = `Sobra Viagem (Acerto: ${acertoId.substring(0, 6)}...) - Motorista: ${motorista}`;
+            await docRef.update({
+                valor: novaSobra,
+                descricao: novaDescricao,
+                data: firebase.firestore.Timestamp.fromDate(new Date(novaDataViagem + 'T12:00:00')),
+                dataAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    }
+
+    /** Limpa os campos do formulário de Acerto */
+    function limparCamposAcerto() {
+        document.getElementById('motoristaAcerto').value = '';
+        document.getElementById('caminhaoAcerto').value = '';
+        document.getElementById('freteAcerto').value = '';
+        document.getElementById('comissaoAcerto').value = '';
+        document.getElementById('formaPagamentoAcerto').value = '';
+        document.getElementById('observacoesAcerto').value = '';
+        document.getElementById('dataViagemAcerto').value = '';
+        document.getElementById('sobraAcerto').textContent = floatToCurrency(0);
+        despesasViagem = [];
+        renderizarDespesas();
+        acertoEmEdicaoId = null;
+        document.querySelector('#acertos button[onclick="salvarAcerto()"]').textContent = '💾 Salvar Acerto';
+    }
+
+    /** Carrega e Exibe Acertos com Filtros */
+    async function carregarAcertos() {
+        const tabela = document.getElementById('acertosTable');
+        tabela.innerHTML = '<tr><td colspan="7" class="text-center py-4">Carregando acertos...</td></tr>';
+
+        const dataInicio = document.getElementById('dataInicioAcerto').value;
+        const dataFim = document.getElementById('dataFimAcerto').value;
+        let query = db.collection("acertos").orderBy("dataViagem", "desc");
+
+        if (dataInicio) {
+            query = query.where("dataViagem", ">=", firebase.firestore.Timestamp.fromDate(new Date(dataInicio + 'T00:00:00')));
+        }
+        if (dataFim) {
+            // Adiciona 1 dia para incluir a data final
+            const endDate = new Date(dataFim + 'T23:59:59'); // Ajuste para incluir o dia inteiro
+            query = query.where("dataViagem", "<=", firebase.firestore.Timestamp.fromDate(endDate));
+        }
+
+        try {
+            const snapshot = await query.get();
+            let totalFrete = 0, totalComissao = 0, totalDespesas = 0, totalSobra = 0;
+            tabela.innerHTML = ''; // Limpa antes de renderizar
+
+            if (snapshot.empty) {
+                 tabela.innerHTML = '<tr><td colspan="7" class="text-center py-4">Nenhum acerto encontrado para o período.</td></tr>';
+                 // Atualiza totais para zero
+                 document.getElementById('totalFreteAcerto').textContent = floatToCurrency(0);
+                 document.getElementById('totalComissaoAcerto').textContent = floatToCurrency(0);
+                 document.getElementById('totalDespesasAcerto').textContent = floatToCurrency(0);
+                 document.getElementById('totalSobraAcerto').textContent = floatToCurrency(0);
+                 return;
+            }
+
+            snapshot.forEach(doc => {
+                const acerto = doc.data();
+                acerto.id = doc.id;
+                
+                totalFrete += acerto.frete || 0;
+                totalComissao += acerto.comissao || 0;
+                totalDespesas += acerto.totalDespesas || 0;
+                totalSobra += acerto.sobra || 0;
+
+                const dataFormatada = acerto.dataViagem ? formatDateBR(acerto.dataViagem.toDate().toISOString().split('T')[0]) : '-';
+                const totalDespesasMonetario = floatToCurrency(acerto.totalDespesas || 0);
+                const despesasTooltip = acerto.despesas.map(d => `${d.descricao}: ${floatToCurrency(d.valor)}`).join('\n');
+
+                tabela.innerHTML += `
+                    <tr class="hover:bg-gray-100">
+                        <td class="px-6 py-4 whitespace-nowrap">${acerto.motorista}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">${acerto.caminhaoNome || acerto.caminhaoId}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right">${floatToCurrency(acerto.frete || 0)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-red-600">${floatToCurrency(acerto.comissao || 0)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-red-600 relative">
+                            ${totalDespesasMonetario}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-green-700">${floatToCurrency(acerto.sobra || 0)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                            <button onclick="abrirModalResumoViagem('${acerto.id}')" class="text-gray-600 hover:text-blue-900 mr-2" title="Resumo/Despesas">👁️</button>
+                            <button onclick="editarAcerto('${acerto.id}')" class="text-blue-600 hover:text-blue-900 mr-2" title="Editar">✏️</button>
+                            <button onclick="excluirAcerto('${acerto.id}')" class="text-red-600 hover:text-red-900 mr-2" title="Excluir">🗑️</button>
+                            <button onclick="abrirModalAssinaturaRecibo('${acerto.id}')" class="text-green-600 hover:text-green-900" title="Recibo">📄</button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            // Atualiza totais
+            document.getElementById('totalFreteAcerto').textContent = floatToCurrency(totalFrete);
+            document.getElementById('totalComissaoAcerto').textContent = floatToCurrency(totalComissao);
+            document.getElementById('totalDespesasAcerto').textContent = floatToCurrency(totalDespesas);
+            document.getElementById('totalSobraAcerto').textContent = floatToCurrency(totalSobra);
+
+        } catch (error) {
+            console.error("Erro ao carregar acertos:", error);
+            tabela.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-red-500">Erro ao carregar dados. Verifique o console.</td></tr>';
+        }
+    }
+
+    /** Abre o modal de resumo detalhado da viagem (o "Olhinho") */
+    async function abrirModalResumoViagem(acertoId) {
+        try {
+            const doc = await db.collection('acertos').doc(acertoId).get();
+            if (!doc.exists) {
+                alert('Acerto não encontrado!');
+                return;
+            }
+            const acerto = doc.data();
+            acertoAtualData = acerto;
+            
+            let placa = 'N/A';
+            if (acerto.caminhaoId) {
+                const caminhaoDoc = await db.collection('caminhoes').doc(acerto.caminhaoId).get();
+                if (caminhaoDoc.exists) {
+                    placa = caminhaoDoc.data().placa;
+                }
+            }
+
+            const dataViagemNormalizada = toDate(acerto.dataViagem);
+            
+            document.getElementById('resumoData').textContent = dataViagemNormalizada ? formatDateBR(dataViagemNormalizada.toISOString().split('T')[0]) : '-';
+            document.getElementById('resumoMotorista').textContent = acerto.motorista;
+            document.getElementById('resumoCaminhao').textContent = `${acerto.caminhaoNome || 'N/A'} (${placa})`;
+            document.getElementById('resumoFrete').textContent = floatToCurrency(acerto.frete || 0);
+            document.getElementById('resumoComissao').textContent = floatToCurrency(acerto.comissao || 0);
+            document.getElementById('resumoFormaPagamento').textContent = acerto.formaPagamento || 'N/A';
+            document.getElementById('resumoTotalDespesas').textContent = floatToCurrency(acerto.totalDespesas || 0);
+            document.getElementById('resumoSobra').textContent = floatToCurrency(acerto.sobra || 0);
+            document.getElementById('resumoObservacoes').textContent = acerto.observacoes || 'N/A';
+
+            // Lista de Despesas
+            const listaDespesas = document.getElementById('resumoListaDespesas');
+            listaDespesas.innerHTML = '';
+            (acerto.despesas || []).forEach(d => {
+                listaDespesas.innerHTML += `<li>- ${d.descricao}: ${floatToCurrency(d.valor)}</li>`;
+            });
+            if (listaDespesas.innerHTML === '') {
+                listaDespesas.innerHTML = '<li>Nenhuma despesa registrada.</li>';
+            }
+
+            document.getElementById('modalResumoViagem').classList.remove('hidden');
+            document.getElementById('modalResumoViagem').style.display = "flex";
+        } catch (error) {
+            console.error('Erro ao buscar acerto para resumo:', error);
+            alert('Erro ao carregar dados para resumo.');
+        }
+    }
+
+
+    function filtrarAcertos() {
+        carregarAcertos(); 
+    }
+
+    /** Editar Acerto */
+    async function editarAcerto(acertoId) {
+        acertoEmEdicaoId = acertoId;
+        document.querySelector('#acertos button[onclick="salvarAcerto()"]').textContent = '🔄 Atualizar Acerto';
+        
+        try {
+            const doc = await db.collection('acertos').doc(acertoId).get();
+            if (!doc.exists) {
+                alert('Acerto não encontrado!');
+                return;
+            }
+            const acerto = doc.data();
+            const dataViagemNormalizada = toDate(acerto.dataViagem);
+
+            document.getElementById('motoristaAcerto').value = acerto.motorista;
+            document.getElementById('caminhaoAcerto').value = acerto.caminhaoId;
+            document.getElementById('freteAcerto').value = floatToCurrency(acerto.frete || 0);
+            document.getElementById('comissaoAcerto').value = floatToCurrency(acerto.comissao || 0);
+            document.getElementById('formaPagamentoAcerto').value = acerto.formaPagamento || '';
+            document.getElementById('observacoesAcerto').value = acerto.observacoes || '';
+            document.getElementById('dataViagemAcerto').value = dataViagemNormalizada ? dataViagemNormalizada.toISOString().split('T')[0] : '';
+            
+            // Carrega despesas para edição
+            despesasViagem = acerto.despesas || [];
+            renderizarDespesas();
+            calcularSobra();
+
+            window.scrollTo({ top: 0, behavior: 'smooth' }); // Volta para o topo do formulário
+        } catch (error) {
+            console.error('Erro ao buscar acerto para edição:', error);
+            alert('Erro ao carregar dados para edição.');
+        }
+    }
+
+    /** Excluir Acerto */
+    async function excluirAcerto(acertoId) {
+        if (!confirm('Tem certeza que deseja excluir este acerto e o lançamento de sobra no caixa?')) return;
+        
+        try {
+            // Exclui o lançamento de caixa relacionado (se existir)
+            const caixaQuery = await db.collection("caixa").where("origemAcertoId", "==", acertoId).get();
+            const batch = db.batch();
+            caixaQuery.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+
+            // Exclui o acerto
+            await db.collection("acertos").doc(acertoId).delete();
+            alert('Acerto e lançamento de caixa excluídos com sucesso!');
+            carregarAcertos();
+            loadAllCaixaAndFilter();
+        } catch (error) {
+            console.error("Erro ao excluir acerto:", error);
+            alert("Erro ao excluir acerto. Verifique o console.");
+        }
+    }
+
+    /** Abre Modal de Assinatura para Recibo */
+    async function abrirModalAssinaturaRecibo(acertoId) {
+        try {
+            const doc = await db.collection('acertos').doc(acertoId).get();
+            if (!doc.exists) {
+                alert('Acerto não encontrado!');
+                return;
+            }
+            acertoAtualData = doc.data(); // Guarda os dados para usar no PDF
+            acertoAtualData.id = acertoId;
+            
+            // Limpa canvas ao abrir
+            limparAssinatura('Motorista', true);
+            limparAssinatura('Proprietario', true);
+
+            document.getElementById('modalAssinaturaRecibo').classList.remove('hidden');
+            document.getElementById('modalAssinaturaRecibo').style.display = "flex";
+            
+            // Re-inicializa canvas para garantir que funcionem
+            initCanvas('Motorista');
+            initCanvas('Proprietario');
+
+        } catch (error) {
+            console.error('Erro ao abrir modal de assinatura:', error);
+            alert('Erro ao carregar dados para assinatura.');
+        }
+    }
+
+    /** Inicializa Canvas de Assinatura */
+    function initCanvas(id) {
+        const canvas = document.getElementById(`canvas${id}`);
+        // Verifica se o canvas existe
+        if (!canvas) return; 
+
+        // Garante que o canvas tenha dimensões corretas (para mobile)
+        const parentWidth = canvas.parentElement.clientWidth;
+        canvas.width = parentWidth;
+        canvas.height = 128; 
+
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        // Limpa o canvas (preenche com branco para garantir)
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        function draw(e) {
+            if (!isDrawing) return;
+
+            // Posição para mouse ou touch
+            let clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            // Correção da escala para o desenho funcionar corretamente
+            const currentX = (clientX - rect.left) * (canvas.width / rect.width);
+            const currentY = (clientY - rect.top) * (canvas.height / rect.height);
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(currentX, currentY);
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            
+            lastX = currentX;
+            lastY = currentY;
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            let clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            
+            const rect = canvas.getBoundingClientRect();
+            lastX = (clientX - rect.left) * (canvas.width / rect.width);
+            lastY = (clientY - rect.top) * (canvas.height / rect.height);
+            e.preventDefault();
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        // Remove listeners antigos para evitar duplicação
+        canvas.replaceWith(canvas.cloneNode(true));
+        const newCanvas = document.getElementById(`canvas${id}`);
+
+        // Mouse events
+        newCanvas.addEventListener('mousedown', startDrawing);
+        newCanvas.addEventListener('mousemove', draw);
+        newCanvas.addEventListener('mouseup', stopDrawing);
+        newCanvas.addEventListener('mouseout', stopDrawing);
+        
+        // Touch events
+        newCanvas.addEventListener('touchstart', startDrawing);
+        newCanvas.addEventListener('touchmove', draw);
+        newCanvas.addEventListener('touchend', stopDrawing);
+    }
+
+    /** Limpa o Canvas de Assinatura */
+    function limparAssinatura(type, skipAlert = false) {
+        const canvas = document.getElementById(`canvas${type}`);
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        // Limpa o canvas (preenche com branco para garantir)
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        if (!skipAlert) alert(`Assinatura do ${type} limpa!`);
+    }
+
+    /** Salva assinaturas e prepara a abertura do Recibo */
+    function salvarAssinaturasEGerarRecibo() {
+        const assMotorista = document.getElementById('canvasMotorista').toDataURL('image/png');
+        const assProprietario = document.getElementById('canvasProprietario').toDataURL('image/png');
+        
+        // Armazena as assinaturas no objeto de dados atual
+        acertoAtualData.assinaturaMotorista = assMotorista;
+        acertoAtualData.assinaturaProprietario = assProprietario;
+
+        // Fecha o modal de assinatura e abre o modal de recibo
+        fecharModalAssinaturaRecibo();
+        abrirModalRecibo(acertoAtualData);
+    }
+    
+    /** Abre o Modal do Recibo com Assinaturas */
+    async function abrirModalRecibo(acerto) {
+        try {
+            // Tenta buscar a placa pelo ID do caminhão
+            let placa = 'N/A';
+            if (acerto.caminhaoId) {
+                const caminhaoDoc = await db.collection('caminhoes').doc(acerto.caminhaoId).get();
+                if (caminhaoDoc.exists) {
+                    placa = caminhaoDoc.data().placa;
+                }
+            }
+
+            const dataViagemNormalizada = toDate(acerto.dataViagem);
+
+
+            document.getElementById('reciboEmpresa').textContent = localStorage.getItem("nomeEmpresa") || 'Nome da Empresa';
+            document.getElementById('reciboMotorista').textContent = acerto.motorista;
+            document.getElementById('reciboCaminhao').textContent = `${acerto.caminhaoNome || 'N/A'} (${placa})`;
+            document.getElementById('reciboData').textContent = dataViagemNormalizada ? formatDateBR(dataViagemNormalizada.toISOString().split('T')[0]) : '-';
+            document.getElementById('reciboComissao').textContent = floatToCurrency(acerto.comissao || 0);
+            document.getElementById('reciboObservacoes').textContent = acerto.observacoes || 'N/A';
+            document.getElementById('reciboDataGeracao').textContent = new Date().toLocaleString('pt-BR');
+
+            // Injeta as imagens de assinatura
+            document.getElementById('reciboAssMotorista').src = acerto.assinaturaMotorista || '';
+            document.getElementById('reciboAssProprietario').src = acerto.assinaturaProprietario || '';
+
+            document.getElementById('modalRecibo').classList.remove('hidden');
+            document.getElementById('modalRecibo').style.display = "flex";
+            window.acertoParaRecibo = acerto; // Armazena globalmente para PDF
+        } catch (error) {
+            console.error('Erro ao gerar recibo:', error);
+            alert('Erro ao carregar dados para o recibo.');
+        }
+    }
+
+
+    /** Gerar PDF do Recibo (simulação) */
+    function gerarReciboPDF() {
+        if (typeof window.jspdf === 'undefined') {
+            alert('Biblioteca jsPDF não carregada. Recurso indisponível.');
+            return;
+        }
+        
+        const doc = new jspdf.jsPDF();
+        const acerto = window.acertoParaRecibo;
+
+        doc.setFontSize(18);
+        doc.setTextColor(30, 64, 175); // Azul
+        doc.text("RECIBO DE COMISSÃO DE VIAGEM", 105, 20, null, null, "center");
+        
+        doc.setFontSize(12);
+        doc.setTextColor(55, 65, 81);
+        doc.text(`Empresa: ${localStorage.getItem("nomeEmpresa") || 'N/A'}`, 20, 35);
+        doc.text(`Data: ${formatDateBR(new Date().toISOString().split('T')[0])}`, 170, 35);
+        
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, 40, 190, 40); // Linha separadora
+
+        let y = 50;
+        doc.setFontSize(14);
+        doc.setTextColor(15, 23, 42);
+
+        doc.text("Resumo da Viagem:", 20, y);
+        y += 8;
+        doc.text(`Motorista: ${acerto.motorista}`, 20, y);
+        doc.text(`Caminhão: ${acerto.caminhaoNome || 'N/A'}`, 100, y);
+        y += 8;
+        
+        const dataViagemNormalizada = toDate(acerto.dataViagem);
+        doc.text(`Data Viagem: ${dataViagemNormalizada ? formatDateBR(dataViagemNormalizada.toISOString().split('T')[0]) : '-'}`, 20, y);
+        y += 15;
+
+        doc.setFontSize(16);
+        doc.setTextColor(220, 38, 38); // Vermelho
+        doc.text(`VALOR PAGO (COMISSÃO): ${floatToCurrency(acerto.comissao || 0)}`, 105, y, null, null, "center");
+        y += 15;
+        
+        doc.setFontSize(10);
+        doc.setTextColor(55, 65, 81);
+        doc.text("Observações:", 20, y);
+        y += 5;
+        doc.text(acerto.observacoes || 'Nenhuma.', 20, y, { maxWidth: 170 });
+        y += 20;
+
+        // Adiciona assinaturas
+        if (acerto.assinaturaMotorista) {
+            doc.addImage(acerto.assinaturaMotorista, 'PNG', 30, y, 60, 20); // x, y, width, height
+        }
+        if (acerto.assinaturaProprietario) {
+            doc.addImage(acerto.assinaturaProprietario, 'PNG', 120, y, 60, 20); // x, y, width, height
+        }
+        y += 25;
+
+        doc.line(30, y, 90, y); // Linha para Ass Motorista
+        doc.line(120, y, 180, y); // Linha para Ass Proprietário
+        y += 5;
+        doc.text("Assinatura do Motorista", 60, y, null, null, "center");
+        doc.text("Assinatura do Proprietário", 150, y, null, null, "center");
+
+        doc.save(`Recibo_Comissao_${acerto.motorista}.pdf`);
+    }
+
+    // ----------------------------------------------------
+    // # LÓGICA DO CAIXA (ABA CAIXA)
+    // ----------------------------------------------------
+    
+    // API Key para o Gemini (deve ser vazia para o Canvas injetar)
+    const apiKey = "";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+
+    /** Chama o Gemini para sugerir uma categoria baseada na descrição */
+    async function sugerirCategoria() {
+        const descricao = document.getElementById('descricaoCaixa').value.trim();
+        const categoriaInput = document.getElementById('categoriaCaixa');
+
+        if (!descricao) {
+            alert("Por favor, preencha a Descrição para obter uma sugestão.");
+            return;
+        }
+
+        categoriaInput.value = "Aguarde, analisando...";
+        
+        const systemPrompt = "Você é um especialista em contabilidade de frotas. Dada a descrição de uma transação, retorne APENAS a categoria financeira mais apropriada (máximo 3 palavras). Exemplos: 'Combustível', 'Pedágio', 'Manutenção', 'Salário', 'Aluguel', 'Frete', 'Outros'.";
+        const userQuery = `Qual categoria para: "${descricao}"?`;
+        
+        const payload = {
+            contents: [{ parts: [{ text: userQuery }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+        };
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "Não foi possível sugerir.";
+            
+            categoriaInput.value = text.replace(/["'.]/g, ''); // Limpa aspas e pontos
+        } catch (error) {
+            console.error("Erro ao chamar a API Gemini:", error);
+            categoriaInput.value = "Erro na API.";
+        }
+    }
+
+
+    /** Exibe/Oculta campos de vencimento/cheque no modal de NOVO lançamento */
+    function toggleVencimentoCheque() {
+        const tipo = document.getElementById('tipoCaixa').value;
+        const isSaida = tipo === 'saida';
+        const isBoleto = document.getElementById('isBoleto').checked;
+        const isCheque = document.getElementById('isCheque').checked;
+        const qtdParcelas = parseInt(document.getElementById('qtdParcelas').value) || 1;
+        const dataVencimentoStr = document.getElementById('dataVencimento').value;
+        const desdobramentoDiv = document.getElementById('desdobramentoParcelas');
+        const tabelaParcelasBody = document.getElementById('tabelaParcelas');
+        const valorTotal = currencyToFloat(document.getElementById('valorCaixa').value);
+
+        document.getElementById('opcoesParcela').classList.toggle('hidden', !isSaida);
+        
+        if (isSaida && (isBoleto || isCheque) && qtdParcelas > 0 && dataVencimentoStr && valorTotal > 0) {
+            desdobrarParcelas(qtdParcelas, dataVencimentoStr, isCheque ? 'apresentacao' : 'vencimento', valorTotal);
+            desdobramentoDiv.classList.remove('hidden');
+        } else {
+            desdobramentoDiv.classList.add('hidden');
+            tabelaParcelasBody.innerHTML = '';
+        }
+
+        document.getElementById('headerDataParcela').textContent = isCheque ? 'Apresentação' : 'Vencimento';
+        document.getElementById('labelVencimento').textContent = isCheque ? 'Apresentação da 1ª Parcela' : 'Vencimento da 1ª Parcela';
+    }
+
+    /** Calcula e exibe a tabela de desdobramento de parcelas */
+    function desdobrarParcelas(qtd, dataInicioStr, tipo, valorTotal) {
+        const valorParcela = valorTotal / qtd;
+        const dataInicio = new Date(dataInicioStr + 'T12:00:00'); // Evita problemas de timezone
+
+        let html = '';
+        for (let i = 0; i < qtd; i++) {
+            const dataParcela = new Date(dataInicio);
+            dataParcela.setMonth(dataParcela.getMonth() + i);
+
+            const dataFormatada = dataParcela.toISOString().split('T')[0];
+            const tipoDoc = tipo === 'vencimento' ? 'Boleto' : 'Cheque';
+
+            html += `
+                <tr>
+                    <td>${i + 1}/${qtd}</td>
+                    <td>${floatToCurrency(valorParcela)}</td>
+                    <td><input type="date" value="${dataFormatada}" id="${tipo}Parcela${i}" class="border p-1 rounded text-sm w-36"></td>
+                    <td>${tipoDoc}</td>
+                </tr>
+            `;
+        }
+        document.getElementById('tabelaParcelas').innerHTML = html;
+    }
+
+    /** Salva Lançamento Manual (Incluindo Parcelas) */
+    async function salvarLancamentoCaixa() {
+        const tipo = document.getElementById('tipoCaixa').value;
+        const valorTotal = currencyToFloat(document.getElementById('valorCaixa').value);
+        const data = document.getElementById('dataCaixa').value;
+        const categoria = document.getElementById('categoriaCaixa').value.trim();
+        const descricao = document.getElementById('descricaoCaixa').value.trim();
+
+        if (valorTotal <= 0 || !data) {
+            alert('Preencha o Tipo, Valor e Data de Lançamento.');
+            return;
+        }
+
+        const isBoleto = document.getElementById('isBoleto').checked;
+        const isCheque = document.getElementById('isCheque').checked;
+        const qtdParcelas = parseInt(document.getElementById('qtdParcelas').value) || 1;
+
+        if (tipo === 'saida' && (isBoleto || isCheque)) {
+            // Lançamento Parcelado
+            const valorParcela = valorTotal / qtdParcelas;
+            const lancamentos = [];
+            const tipoParcela = isBoleto ? 'vencimento' : 'apresentacao';
+            
+            for (let i = 0; i < qtdParcelas; i++) {
+                const dataParcelaStr = document.getElementById(`${tipoParcela}Parcela${i}`).value;
+                if (!dataParcelaStr) {
+                    alert(`Preencha a data da parcela ${i + 1}`);
+                    return;
+                }
+                lancamentos.push({
+                    tipo,
+                    valor: valorParcela,
+                    data: firebase.firestore.Timestamp.fromDate(new Date(data + 'T12:00:00')), // Data de Lançamento
+                    dataVencimento: firebase.firestore.Timestamp.fromDate(new Date(dataParcelaStr + 'T12:00:00')), // Data de Vencimento/Apresentação
+                    categoria,
+                    descricao: `${descricao || 'Lançamento Manual'} (${i + 1}/${qtdParcelas})`, // Adicionado fallback para descrição
+                    status: 'a vencer',
+                    parcela: `${i + 1}/${qtdParcelas}`,
+                    tipoDocumento: isBoleto ? 'Boleto' : 'Cheque',
+                    dataRegistro: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
+            const batch = db.batch();
+            lancamentos.forEach(lancamento => {
+                batch.set(db.collection("caixa").doc(), lancamento);
+            });
+            await batch.commit();
+            alert('Lançamentos parcelados criados com sucesso!');
+
+        } else {
+            // Lançamento Simples (Entrada ou Saída à vista)
+            const lancamento = {
+                tipo,
+                valor: valorTotal,
+                data: firebase.firestore.Timestamp.fromDate(new Date(data + 'T12:00:00')),
+                categoria,
+                descricao: descricao || 'Lançamento Manual', // Adicionado fallback para descrição
+                dataVencimento: tipo === 'saida' ? (data ? firebase.firestore.Timestamp.fromDate(new Date(data + 'T12:00:00')) : null) : null, // Saída à vista
+                status: tipo === 'entrada' ? 'recebido' : 'pago',
+                dataRegistro: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            await db.collection("caixa").add(lancamento);
+            alert('Lançamento salvo com sucesso!');
+        }
+
+        limparCamposCaixa();
+        loadAllCaixaAndFilter();
+    }
+
+    /** Limpa campos do Caixa */
+    function limparCamposCaixa() {
+        document.getElementById('tipoCaixa').value = 'entrada';
+        document.getElementById('valorCaixa').value = '';
+        document.getElementById('dataCaixa').value = '';
+        document.getElementById('categoriaCaixa').value = '';
+        document.getElementById('descricaoCaixa').value = '';
+        document.getElementById('isBoleto').checked = false;
+        document.getElementById('isCheque').checked = false;
+        document.getElementById('qtdParcelas').value = 1;
+        document.getElementById('dataVencimento').value = '';
+        document.getElementById('desdobramentoParcelas').classList.add('hidden');
+        toggleVencimentoCheque();
+    }
+    
+    /** Função principal de filtro e totais */
+    function filtrarCaixaEAtualizarTotais(items) {
+      // items pode vir vazio -> tenta pegar window.caixaItems
+      items = items || window.caixaItems || [];
+      // elementos (IDs padrão; ajusta caso seu HTML use outros)
+      const fLancEl = document.getElementById('filtroTipoRecebimento');
+      const fVencEl = document.getElementById('filtroTipoVencimento');
+      const fMesEl = document.getElementById('filtroMes');
+      
+      const fLanc = fLancEl ? fLancEl.checked : false;
+      const fVenc = fVencEl ? fVencEl.checked : false;
+
+      const lancStartVal = (document.getElementById('dataInicioCaixa')||{value:''}).value;
+      const lancEndVal   = (document.getElementById('dataFimCaixa')  ||{value:''}).value;
+
+      let lancStart = null;
+      let lancEnd   = null;
+      
+      // 1. Definição do Período (lancStart / lancEnd)
+      
+      // Prioriza filtro por mês
+      if (fMesEl && fMesEl.value) {
+          const [year, month] = fMesEl.value.split('-');
+          lancStart = new Date(year, month - 1, 1, 0, 0, 0); // startOfDay
+          lancEnd   = new Date(year, month, 0, 23, 59, 59, 999); // endOfDay
+      }
+      // Sobrescreve com filtro de data manual se fornecido (apenas se o input não estiver vazio)
+      if (lancStartVal) lancStart = startOfDay(parseLocalDateFromInput(lancStartVal));
+      if (lancEndVal) lancEnd = endOfDay(parseLocalDateFromInput(lancEndVal));
+
+      const vencStart = lancStart; // Usamos o mesmo range para vencimento (no modo Realizado)
+      const vencEnd   = lancEnd;
+
+      // Se nenhum filtro de data foi preenchido, tratamos como "sem filtro de data"
+      const temFiltroData = lancStart || lancEnd;
+
+      // tabela alvo e tot elements
+      const tbody = document.getElementById('caixaTable') || null;
+      if (tbody) tbody.innerHTML = '';
+
+      let totalEntradas = 0;
+      let totalSaidas = 0;
+      const mostrados = [];
+
+      items.forEach(raw => {
+        // normaliza campos
+        const tipoRaw = (raw.tipo || raw.type || '').toString().toLowerCase();
+        const tipo = (tipoRaw === 'entrada' || tipoRaw === 'recebimento') ? 'entrada' :
+                     (tipoRaw === 'saida' || tipoRaw === 'saída' || tipoRaw === 'despesa') ? 'saida' :
+                     tipoRaw || '';
+
+        const valor = parseNumber(raw.valor ?? raw.value ?? raw.amount ?? raw.vlr ?? 0);
+        const dataLanc = toDate(raw.data || raw.dataLancamento || raw.lancamento || raw.createdAt) ;
+        const dataVenc = toDate(raw.dataVencimento || raw.vencimento || raw.venc || raw.dueDate);
+        const forma = (raw.forma || raw.form || '') + '';
+        const descricao = (raw.descricao || raw.description || raw.obs || raw.note || '') + '';
+
+        // decide incluir
+        let incluir = false;
+        
+        // Regra de Filtro
+        if (!temFiltroData && !fLanc && !fVenc) {
+            // Regra 1: Sem filtro de data e sem checkbox => inclui tudo
+            incluir = true;
+        } else {
+            // Se houver filtro de data E/OU checkbox:
+            
+            // Entradas (Filtradas por Lançamento)
+            if (tipo === 'entrada') {
+                if (fLanc || (!fVenc && !fLanc && temFiltroData)) {
+                    incluir = inRange(dataLanc, lancStart, lancEnd);
+                }
+            } 
+            // Saídas (Filtradas por Vencimento se fVenc, ou Lançamento se fLanc)
+            else if (tipo === 'saida') {
+                // Filtro por Vencimento (Foco: Pagamentos a fazer no período)
+                if (fVenc) {
+                    incluir = inRange(dataVenc, vencStart, vencEnd);
+                } 
+                // Filtro por Lançamento (Foco: Despesas registradas no período)
+                else if (fLanc) {
+                    incluir = inRange(dataLanc, lancStart, lancEnd);
+                }
+                // Filtro de Data Simples (Data customizada ativa, mas sem checkbox)
+                else if (!fLanc && !fVenc && temFiltroData) {
+                    // Assume que se a data está ativa, queremos ver Saídas por vencimento OU lançamento no range
+                    incluir = inRange(dataLanc, lancStart, lancEnd) || inRange(dataVenc, vencStart, vencEnd);
+                }
+            }
+        }
+        
+        // Se a inclusão foi confirmada e não é duplicado
+        if (incluir && !mostrados.some(m => m.id === raw.id)) {
+          
+          mostrados.push({ id: raw.id || raw._id || '', tipo, valor, dataLanc, dataVenc, forma, descricao, status: raw.status });
+          if (tipo === 'entrada') totalEntradas += valor;
+          else if (tipo === 'saida') totalSaidas += valor;
+        }
+      });
+
+      // renderiza tabela (se existir)
+      if (tbody) {
+        mostrados.sort((a, b) => (b.dataLanc?.getTime() || 0) - (a.dataLanc?.getTime() || 0)); // Ordena por data de lançamento
+        
+        if (mostrados.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">Nenhum lançamento encontrado para os filtros.</td></tr>';
+        } else {
+            tbody.innerHTML = '';
+            const hoje = startOfDay(new Date()); // Usando startOfDay para comparação de data
+            mostrados.forEach(it => {
+              const tr = document.createElement('tr');
+              const dLanc = it.dataLanc ? it.dataLanc.toLocaleDateString('pt-BR') : '-';
+              const dVenc = it.dataVenc ? it.dataVenc.toLocaleDateString('pt-BR') : '-';
+              
+              const isEntrada = it.tipo === 'entrada';
+              const dataVencNormalizada = it.dataVenc ? startOfDay(it.dataVenc) : null;
+              
+              // Verifica se está vencido (não é entrada, tem vencimento, vencimento < hoje, e não está pago)
+              const isVencido = !isEntrada && dataVencNormalizada && dataVencNormalizada < hoje && it.status !== 'pago';
+              const classValor = isEntrada ? 'text-green-700' : (isVencido ? 'text-red-700' : 'text-red-600');
+              
+              // Botão Pagar/Estornar
+              let btnPagar = '';
+              if (!isEntrada && it.status === 'a vencer') {
+                  btnPagar = `<button onclick="mudarStatusCaixa('${it.id}', 'pago')" class="text-green-600 hover:text-green-900 mr-2 small-btn" title="Pagar">✅ Pagar</button>`;
+              } else if (!isEntrada && it.status === 'pago') {
+                  btnPagar = `<button onclick="mudarStatusCaixa('${it.id}', 'a vencer')" class="text-yellow-600 hover:text-yellow-800 mr-2 small-btn" title="Estornar Pagamento">↩️ Estornar</button>`;
+              }
+
+              tr.className = `hover:bg-gray-100 ${isVencido ? 'bg-red-50' : ''}`;
+
+              tr.innerHTML = `
+                  <td class="px-6 py-4 whitespace-nowrap">${dLanc}</td>
+                  <td class="px-6 py-4 whitespace-nowrap ${isEntrada ? 'text-green-600' : 'text-red-600'}">${(it.tipo || '').toUpperCase()}</td>
+                  <td class="px-6 py-4">${it.descricao}</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-right font-bold ${classValor}">${formatBRL(it.valor)}</td>
+                  <td class="px-6 py-4 whitespace-nowrap">${dVenc} (${it.status === 'pago' ? 'Pago' : (isVencido ? 'Vencido' : it.status)})</td>
+                  <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                      <button onclick="editarLancamentoCaixa('${it.id}')" class="text-blue-600 hover:text-blue-900 mr-2 small-btn" title="Editar">✏️</button>
+                      ${btnPagar}
+                      <button onclick="excluirLancamentoCaixa('${it.id}')" class="text-red-600 hover:text-red-900 small-btn" title="Excluir">🗑️</button>
+                  </td>`;
+              tbody.appendChild(tr);
+            });
+        }
+      }
+
+      // atualiza totalizadores (tenta IDs padrão do seu HTML)
+      const saldo = totalEntradas - totalSaidas;
+      document.getElementById('totalEntradasCaixa').textContent = formatBRL(totalEntradas);
+      document.getElementById('totalSaidasCaixa').textContent = formatBRL(totalSaidas);
+      document.getElementById('saldoAtualCaixa').textContent = formatBRL(saldo);
+      
+      // Chamada para verificar alertas usando TODOS os itens carregados
+      verificarAlertasVencimento(window.caixaItems); 
+      
+      console.log('[filtrarCaixa] total itens=', items.length, ' exibidos=', mostrados.length, ' totEntradas=', totalEntradas, ' totSaidas=', totalSaidas);
+    }
+    
+    /** Inicializa o Listener do Firestore e carrega os dados iniciais */
+    function loadAllCaixaAndFilter() {
+        // Exibe "Carregando" na tabela
+        document.getElementById('caixaTable').innerHTML = '<tr><td colspan="6" class="text-center py-4">Carregando dados...</td></tr>';
+        
+        const query = db.collection("caixa").orderBy("dataRegistro", "desc");
+        
+        query.get()
+        .then(snapshot => {
+            // Mapeia todos os documentos para o array global
+            window.caixaItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // 1. Aplica o filtro e renderiza a tabela
+            filtrarCaixaEAtualizarTotais(window.caixaItems);
+            
+            // 2. O alerta de vencimento é chamado DENTRO do filtrarCaixaEAtualizarTotais
+        })
+        .catch(error => {
+            console.error("Erro ao carregar dados iniciais do caixa:", error);
+            document.getElementById('caixaTable').innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-500">Erro ao carregar dados. Verifique o console.</td></td>';
+        });
+    }
+
+    /** Mudar Status de Pagamento (Pagar/Estornar) */
+    async function mudarStatusCaixa(lancamentoId, novoStatus) {
+        try {
+            await db.collection("caixa").doc(lancamentoId).update({
+                status: novoStatus,
+                dataPagamento: novoStatus === 'pago' ? firebase.firestore.FieldValue.serverTimestamp() : null
+            });
+            // Recarrega todos os dados e aplica o filtro
+            loadAllCaixaAndFilter(); 
+            alert(`Lançamento ${novoStatus === 'pago' ? 'pago' : 'estornado'} com sucesso!`);
+        } catch (error) {
+            console.error("Erro ao mudar status:", error);
+            alert("Erro ao realizar a operação.");
+        }
+    }
+
+
+    /** Excluir Lançamento */
+    async function excluirLancamentoCaixa(lancamentoId) {
+        if (!confirm('Tem certeza que deseja excluir este lançamento do caixa?')) return;
+        
+        try {
+            await db.collection("caixa").doc(lancamentoId).delete();
+            alert('Lançamento excluído com sucesso!');
+            loadAllCaixaAndFilter();
+        } catch (error) {
+            console.error("Erro ao excluir lançamento:", error);
+            alert("Erro ao excluir lançamento. Verifique o console.");
+        }
+    }
+
+    /** Abre Modal para Edição de Lançamento */
+    async function editarLancamentoCaixa(lancamentoId) {
+        lancamentoEmEdicaoId = lancamentoId;
+        document.getElementById('lancamentoIdCaixa').value = lancamentoId;
+        
+        try {
+            const doc = await db.collection('caixa').doc(lancamentoId).get();
+            if (!doc.exists) {
+                alert('Lançamento não encontrado!');
+                return;
+            }
+            const lancamento = doc.data();
+
+            const dataNormalizada = toDate(lancamento.data);
+            const vencimentoNormalizada = toDate(lancamento.dataVencimento);
+
+
+            document.getElementById('editTipoCaixa').value = lancamento.tipo;
+            document.getElementById('editValorCaixa').value = floatToCurrency(lancamento.valor || 0);
+            document.getElementById('editDataCaixa').value = dataNormalizada ? dataNormalizada.toISOString().split('T')[0] : '';
+            document.getElementById('editCategoriaCaixa').value = lancamento.categoria || '';
+            document.getElementById('editDescricaoCaixa').value = lancamento.descricao;
+            
+            // Vencimento (para Parcelados/Saídas)
+            if (vencimentoNormalizada) {
+                document.getElementById('editDataVencimento').value = vencimentoNormalizada.toISOString().split('T')[0];
+                document.getElementById('editOpcoesParcela').classList.remove('hidden');
+                document.getElementById('editLabelVencimento').textContent = (lancamento.tipoDocumento === 'Cheque' ? 'Apresentação' : 'Vencimento');
+                document.getElementById('editParcAtual').textContent = lancamento.parcela ? lancamento.parcela.split('/')[0] : 1;
+                document.getElementById('editParcTotal').textContent = lancamento.parcela ? lancamento.parcela.split('/')[1] : 1;
+            } else {
+                document.getElementById('editOpcoesParcela').classList.add('hidden');
+            }
+
+            document.getElementById('modalCaixa').classList.remove('hidden');
+            document.getElementById('modalCaixa').style.display = "flex";
+        } catch (error) {
+            console.error('Erro ao buscar lançamento para edição:', error);
+            alert('Erro ao carregar dados para edição.');
+        }
+    }
+
+    function fecharModalCaixa() {
+        document.getElementById('modalCaixa').classList.add('hidden');
+        document.getElementById('modalCaixa').style.display = "none";
+        lancamentoEmEdicaoId = null;
+    }
+
+    /** Salva Edição de Lançamento */
+    async function salvarEdicaoCaixa() {
+        const id = document.getElementById('lancamentoIdCaixa').value;
+        const tipo = document.getElementById('editTipoCaixa').value;
+        const valor = currencyToFloat(document.getElementById('editValorCaixa').value);
+        const data = document.getElementById('editDataCaixa').value;
+        const categoria = document.getElementById('editCategoriaCaixa').value.trim();
+        const descricao = document.getElementById('editDescricaoCaixa').value.trim();
+        const dataVencimento = document.getElementById('editDataVencimento').value;
+
+        if (valor <= 0 || !data) {
+            alert('Preencha os campos obrigatórios (Tipo, Valor e Data).');
+            return;
+        }
+
+        const updates = {
+            tipo,
+            valor,
+            data: firebase.firestore.Timestamp.fromDate(new Date(data + 'T12:00:00')),
+            categoria,
+            descricao: descricao || 'Lançamento Manual (Editado)',
+            dataAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (dataVencimento && dataVencimento !== "") {
+            updates.dataVencimento = firebase.firestore.Timestamp.fromDate(new Date(dataVencimento + 'T12:00:00'));
+        } else {
+            // Se o campo de vencimento foi limpo na edição, garanta que seja salvo como null
+             updates.dataVencimento = null; 
+        }
+
+        try {
+            await db.collection("caixa").doc(id).update(updates);
+            alert('Lançamento atualizado com sucesso!');
+            fecharModalCaixa();
+            loadAllCaixaAndFilter();
+        } catch (error) {
+            console.error('Erro ao salvar edição:', error);
+            alert('Erro ao salvar edição do lançamento.');
+        }
+    }
+
+    /** Verifica e Exibe Alertas de Vencimento */
+    function verificarAlertasVencimento(lancamentos) {
+        // Usa normalizeToDate para comparar apenas o dia
+        const hoje = normalizeToDate(new Date()); 
+
+        const vencidos = lancamentos.filter(l => {
+            const vencimento = toDate(l.dataVencimento);
+            if (!vencimento) return false;
+            
+            const dataVencNormalizada = normalizeToDate(vencimento);
+            
+            // Verifica se é saída, está a vencer (ou não está pago) e o dia de vencimento é HOJE ou ANTES
+            return l.tipo === 'saida' && 
+                dataVencNormalizada && 
+                dataVencNormalizada.getTime() <= hoje.getTime() && 
+                l.status !== 'pago';
+        });
+        
+        // Filtra para mostrar apenas os vencidos que NÃO foram pagos
+        const vencidosNaoPagos = vencidos.filter(l => l.status !== 'pago');
+        
+        const alertaDiv = document.getElementById('alertaVencimentos');
+        const listaUl = document.getElementById('listaVencimentos');
+        
+        if (vencidosNaoPagos.length > 0) {
+            alertaDiv.classList.remove('hidden');
+            listaUl.innerHTML = vencidosNaoPagos.map(v => {
+                const vencimento = toDate(v.dataVencimento);
+                const dataVenc = vencimento ? vencimento.toLocaleDateString('pt-BR') : '-';
+                
+                // Classifica se vencido hoje ou atrasado
+                const statusTexto = (startOfDay(vencimento).getTime() === hoje.getTime()) ? 'VENCE HOJE' : 'ATRASADO';
+
+                return `<li>[${statusTexto}] ${v.descricao} (${floatToCurrency(v.valor)})</li>`;
+            }).join('');
+        } else {
+            alertaDiv.classList.add('hidden');
+        }
+    }
+
+    // ----------------------------------------------------
+    // # LÓGICA DO CADASTRO DE CAMINHÃO (ABA CAMINHAO)
+    // ----------------------------------------------------
+
+    /** Salva ou Edita Caminhão */
+    async function salvarCaminhao() {
+        const nome = document.getElementById('nomeCaminhao').value.trim();
+        const placa = document.getElementById('placaCaminhao').value.trim();
+
+        if (!nome || !placa) {
+            alert('Preencha Nome e Placa do Caminhão.');
+            return;
+        }
+
+        const caminhaoData = { nome, placa };
+
+        try {
+            await db.collection("caminhoes").add(caminhaoData);
+            alert('Caminhão salvo com sucesso!');
+            document.getElementById('nomeCaminhao').value = '';
+            document.getElementById('placaCaminhao').value = '';
+            carregarCaminhoes();
+            carregarOptionsCaminhao(); // Atualiza a lista de seleção
+        } catch (error) {
+            console.error("Erro ao salvar caminhão:", error);
+            alert("Erro ao salvar caminhão. Verifique o console.");
+        }
+    }
+
+    /** Carrega e Exibe Caminhões */
+    async function carregarCaminhoes() {
+        const tabela = document.getElementById('caminhoesTable');
+        tabela.innerHTML = '<tr><td colspan="3" class="text-center py-4">Carregando caminhões...</td></tr>';
+        
+        try {
+            const snapshot = await db.collection("caminhoes").orderBy("nome", "asc").get();
+            tabela.innerHTML = ''; // Limpa antes de renderizar
+
+            if (snapshot.empty) {
+                tabela.innerHTML = '<tr><td colspan="3" class="text-center py-4">Nenhum caminhão cadastrado.</td></tr>';
+                return;
+            }
+
+            snapshot.forEach(doc => {
+                const caminhao = doc.data();
+                caminhao.id = doc.id;
+
+                tabela.innerHTML += `
+                    <tr class="hover:bg-gray-100">
+                        <td class="px-6 py-4 whitespace-nowrap">${caminhao.nome}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">${caminhao.placa}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                            <button onclick="excluirCaminhao('${caminhao.id}')" class="text-red-600 hover:text-red-900" title="Excluir">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+        } catch (error) {
+            console.error("Erro ao carregar caminhões:", error);
+            tabela.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
+        }
+    }
+
+    /** Carrega Caminhões no <select> de Acerto */
+    async function carregarOptionsCaminhao() {
+        const select = document.getElementById('caminhaoAcerto');
+        select.innerHTML = '<option value="">Selecione o Caminhão</option>';
+
+        try {
+            const snapshot = await db.collection("caminhoes").orderBy("nome", "asc").get();
+            snapshot.forEach(doc => {
+                const caminhao = doc.data();
+                select.innerHTML += `<option value="${doc.id}">${caminhao.nome} - ${caminhao.placa}</option>`;
+            });
+        } catch (error) {
+            console.error("Erro ao carregar options de caminhão:", error);
+        }
+    }
+
+    // ----------------------------------------------------
+    // # FUNÇÕES GERAIS E INICIALIZAÇÃO
+    // ----------------------------------------------------
+
+    /** Ordena Tabela */
+    function ordenarTabela(tableId, columnIndex) {
+        const table = document.getElementById(tableId);
+        let switching = true;
+        let dir = "asc"; 
+        let shouldSwitch;
+        let i;
+
+        while (switching) {
+            switching = false;
+            const rows = table.rows;
+            for (i = 0; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                const x = rows[i].getElementsByTagName("TD")[columnIndex];
+                const y = rows[i + 1].getElementsByTagName("TD")[columnIndex];
+                
+                let xContent = x.innerHTML.toLowerCase().replace("r$", "").replace(/\./g, "").replace(",", ".");
+                let yContent = y.innerHTML.toLowerCase().replace("r$", "").replace(/\./g, "").replace(",", ".");
+                
+                // Conversão para número para colunas financeiras
+                if (x.className.includes("text-right")) {
+                    xContent = parseFloat(xContent) || 0;
+                    yContent = parseFloat(yContent) || 0;
+                }
+
+                if (dir === "asc") {
+                    if (xContent > yContent) {
+                        shouldSwitch= true;
+                        break;
+                    }
+                } else if (dir === "desc") {
+                    if (xContent < yContent) {
+                        shouldSwitch= true;
+                        break;
+                    }
+                }
+            }
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+            } else {
+                if (dir === "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+    }
+
+    /** Inicialização do Sistema (após login) */
+    function initSystem() {
+        // Carrega nome da empresa
+        const nomeEmpresa = localStorage.getItem("nomeEmpresa") || "Nome da Empresa";
+        document.getElementById("nomeEmpresaHeader").innerText = nomeEmpresa;
+        document.getElementById("novoNomeEmpresa").value = nomeEmpresa;
+
+        // Inicializa Canvas de Assinatura
+        initCanvas('Motorista');
+        initCanvas('Proprietario');
+
+        // Carrega dados iniciais
+        carregarOptionsCaminhao();
+        carregarAcertos();
+        loadAllCaixaAndFilter(); // Chamada inicial de carga e filtro do caixa
+    }
+    
+    /** Inicialização ao carregar a página */
+    window.onload = () => {
+        // Redimensiona o canvas para o tamanho do container ao iniciar
+        const motoristaCanvas = document.getElementById('canvasMotorista');
+        const proprietarioCanvas = document.getElementById('canvasProprietario');
+
+        if (motoristaCanvas && proprietarioCanvas) {
+            const parentWidth = motoristaCanvas.parentElement.clientWidth;
+            motoristaCanvas.width = parentWidth;
+            motoristaCanvas.height = 128; // Altura fixa
+            proprietarioCanvas.width = parentWidth;
+            proprietarioCanvas.height = 128; // Altura fixa
+        }
+
+        // Login Persistente
+        if (localStorage.getItem("usuarioLogado") === "true") {
+            document.getElementById("loginPage").style.display = "none";
+            document.getElementById("appPage").classList.remove("hidden");
+            initSystem();
+            changeTab('acertos'); // Garante a aba correta
+        } else {
+            // Garante que o app esteja escondido e o login visível
+            document.getElementById("loginPage").style.display = "flex";
+            document.getElementById("appPage").classList.add("hidden");
+        }
+    };
+    
+// Alias para o botão do filtro
+function filtrarCaixa() {
+    loadAllCaixaAndFilter(); // Chama a função principal de carga e filtro
+}
+</script>
