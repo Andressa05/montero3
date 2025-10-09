@@ -459,10 +459,11 @@
 
         <!-- --------------------------------------- ABA: CADASTRO DE CAMINHÃO --------------------------------------- -->
         <div id="caminhao" class="tab-content hidden">
-            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Cadastro de Caminhões</h2>
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4" id="tituloCaminhao">Cadastro de Caminhões</h2>
 
             <!-- Formulário de Cadastro de Caminhão -->
             <div class="bg-gray-50 p-6 rounded-lg shadow-md mb-6">
+                <input type="hidden" id="caminhaoEmEdicaoId">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
                         <label class="block text-gray-700 mb-1">Nome do Caminhão <span class="text-red-500">*</span></label>
@@ -473,9 +474,14 @@
                         <input type="text" id="placaCaminhao" oninput="formatPlaca(this)" maxlength="8" class="w-full border p-2 rounded uppercase" placeholder="AAA-1234 (Mercosul: AAA1B23)">
                     </div>
                 </div>
-                <button onclick="salvarCaminhao()" class="button-primary text-white p-3 rounded font-semibold w-full">
-                    💾 Salvar Caminhão
-                </button>
+                <div class="flex space-x-4">
+                    <button onclick="salvarCaminhao()" class="button-primary text-white p-3 rounded font-semibold flex-grow" id="btnSalvarCaminhao">
+                        💾 Salvar Caminhão
+                    </button>
+                    <button onclick="limparCamposCaminhao()" class="bg-gray-400 hover:bg-gray-500 text-white p-3 rounded font-semibold w-28 hidden" id="btnLimparCaminhao">
+                        🧼 Limpar
+                    </button>
+                </div>
             </div>
 
             <hr class="my-6">
@@ -483,7 +489,7 @@
             <!-- Tabela de Caminhões -->
             <h3 class="text-xl font-semibold text-gray-700 mb-4">Caminhões Cadastrados</h3>
             <div class="overflow-x-auto bg-white p-4 rounded-lg shadow">
-                <table class="min-w-full divide-y divide-gray-200">
+                <table id="caminhoesTable" class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
@@ -491,7 +497,7 @@
                             <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
                         </tr>
                     </thead>
-                    <tbody id="caminhoesTable" class="bg-white divide-y divide-gray-200">
+                    <tbody id="caminhoesTableBody" class="bg-white divide-y divide-gray-200">
                         <!-- Caminhões serão injetados aqui -->
                     </tbody>
                 </table>
@@ -696,6 +702,7 @@
     let despesasViagem = [];
     let acertoEmEdicaoId = null;
     let lancamentoEmEdicaoId = null;
+    let caminhaoEmEdicaoId = null; // Variável para rastrear o caminhão em edição
     let canvasMotorista, ctxMotorista, isDrawingMotorista = false;
     let canvasProprietario, ctxProprietario, isDrawingProprietario = false;
     let acertoAtualData = null; // Para armazenar dados do acerto para o resumo/recibo
@@ -722,6 +729,17 @@
       }
       const n = parseFloat(s);
       return isNaN(n) ? 0 : n;
+    }
+
+    // NOVA FUNÇÃO PARA ORDENAÇÃO DE DATAS
+    function parseDateBR(value) {
+        if (!value) return new Date(0);
+        // Tenta extrair a parte da data e remover o status "(Vencido)", "(Pago)", etc.
+        const datePart = value.split(' ')[0];
+        const [dia, mes, ano] = datePart.split('/');
+        if (!dia || !mes || !ano) return new Date(0);
+        // Cria a data no formato YYYY-MM-DD para evitar problemas de fuso/locale (startOfDay)
+        return new Date(parseInt(ano, 10), parseInt(mes, 10) - 1, parseInt(dia, 10));
     }
     
     function parseLocalDateFromInput(value) {
@@ -1036,7 +1054,7 @@
             if (acertoEmEdicaoId) {
                 // 1. Edição de Acerto
                 await db.collection("acertos").doc(acertoEmEdicaoId).update(acertoData);
-                await atualizarLancamentoCaixaAcerto(motorista, sobra, dataViagem);
+                await atualizarLancamentoCaixaAcerto(acertoEmEdicaoId, motorista, sobra, dataViagem);
                 alert('Acerto atualizado e Sobra no Caixa sincronizada com sucesso!');
             } else {
                 // 2. Novo Acerto
@@ -1063,7 +1081,8 @@
             tipo: 'entrada',
             valor: sobra,
             data: firebase.firestore.Timestamp.fromDate(new Date(dataViagem + 'T12:00:00')),
-            descricao: `Sobra Viagem (Acerto: ${acertoId.substring(0, 6)}...) - Motorista: ${motorista}`,
+            // CORREÇÃO 1: Remover o ID do acerto da descrição
+            descricao: `Sobra Viagem - Motorista: ${motorista}`,
             categoria: 'Sobra Viagem',
             status: 'recebido', // Sobra de Acerto sempre entra como recebida
             origemAcertoId: acertoId,
@@ -1077,7 +1096,8 @@
         const caixaQuery = await db.collection("caixa").where("origemAcertoId", "==", acertoId).get();
         if (!caixaQuery.empty) {
             const docRef = caixaQuery.docs[0].ref;
-            const novaDescricao = `Sobra Viagem (Acerto: ${acertoId.substring(0, 6)}...) - Motorista: ${motorista}`;
+            // CORREÇÃO 1: Remover o ID do acerto da descrição
+            const novaDescricao = `Sobra Viagem - Motorista: ${motorista}`;
             await docRef.update({
                 valor: novaSobra,
                 descricao: novaDescricao,
@@ -1189,33 +1209,32 @@
                 alert('Acerto não encontrado!');
                 return;
             }
-            const acerto = doc.data();
-            acertoAtualData = acerto;
+            acertoAtualData = doc.data();
             
             let placa = 'N/A';
-            if (acerto.caminhaoId) {
-                const caminhaoDoc = await db.collection('caminhoes').doc(acerto.caminhaoId).get();
+            if (acertoAtualData.caminhaoId) {
+                const caminhaoDoc = await db.collection('caminhoes').doc(acertoAtualData.caminhaoId).get();
                 if (caminhaoDoc.exists) {
                     placa = caminhaoDoc.data().placa;
                 }
             }
 
-            const dataViagemNormalizada = toDate(acerto.dataViagem);
+            const dataViagemNormalizada = toDate(acertoAtualData.dataViagem);
             
             document.getElementById('resumoData').textContent = dataViagemNormalizada ? formatDateBR(dataViagemNormalizada.toISOString().split('T')[0]) : '-';
-            document.getElementById('resumoMotorista').textContent = acerto.motorista;
-            document.getElementById('resumoCaminhao').textContent = `${acerto.caminhaoNome || 'N/A'} (${placa})`;
-            document.getElementById('resumoFrete').textContent = floatToCurrency(acerto.frete || 0);
-            document.getElementById('resumoComissao').textContent = floatToCurrency(acerto.comissao || 0);
-            document.getElementById('resumoFormaPagamento').textContent = acerto.formaPagamento || 'N/A';
-            document.getElementById('resumoTotalDespesas').textContent = floatToCurrency(acerto.totalDespesas || 0);
-            document.getElementById('resumoSobra').textContent = floatToCurrency(acerto.sobra || 0);
-            document.getElementById('resumoObservacoes').textContent = acerto.observacoes || 'N/A';
+            document.getElementById('resumoMotorista').textContent = acertoAtualData.motorista;
+            document.getElementById('resumoCaminhao').textContent = `${acertoAtualData.caminhaoNome || 'N/A'} (${placa})`;
+            document.getElementById('resumoFrete').textContent = floatToCurrency(acertoAtualData.frete || 0);
+            document.getElementById('resumoComissao').textContent = floatToCurrency(acertoAtualData.comissao || 0);
+            document.getElementById('resumoFormaPagamento').textContent = acertoAtualData.formaPagamento || 'N/A';
+            document.getElementById('resumoTotalDespesas').textContent = floatToCurrency(acertoAtualData.totalDespesas || 0);
+            document.getElementById('resumoSobra').textContent = floatToCurrency(acertoAtualData.sobra || 0);
+            document.getElementById('resumoObservacoes').textContent = acertoAtualData.observacoes || 'N/A';
 
             // Lista de Despesas
             const listaDespesas = document.getElementById('resumoListaDespesas');
             listaDespesas.innerHTML = '';
-            (acerto.despesas || []).forEach(d => {
+            (acertoAtualData.despesas || []).forEach(d => {
                 listaDespesas.innerHTML += `<li>- ${d.descricao}: ${floatToCurrency(d.valor)}</li>`;
             });
             if (listaDespesas.innerHTML === '') {
@@ -1789,7 +1808,10 @@
             
             // Entradas (Filtradas por Lançamento)
             if (tipo === 'entrada') {
-                if (fLanc || (!fVenc && !fLanc && temFiltroData)) {
+                if (fLanc) { // Se Recebimento marcado
+                    incluir = inRange(dataLanc, lancStart, lancEnd);
+                } else if (!fVenc && !fLanc && temFiltroData) {
+                    // Filtro de data simples ativo (sem checkbox)
                     incluir = inRange(dataLanc, lancStart, lancEnd);
                 }
             } 
@@ -2067,6 +2089,17 @@
     // # LÓGICA DO CADASTRO DE CAMINHÃO (ABA CAMINHAO)
     // ----------------------------------------------------
 
+    /** Limpa formulário de Caminhão e volta para o modo Cadastro */
+    function limparCamposCaminhao() {
+        document.getElementById('nomeCaminhao').value = '';
+        document.getElementById('placaCaminhao').value = '';
+        caminhaoEmEdicaoId = null;
+        document.getElementById('tituloCaminhao').textContent = 'Cadastro de Caminhões';
+        document.getElementById('btnSalvarCaminhao').textContent = '💾 Salvar Caminhão';
+        document.getElementById('btnLimparCaminhao').classList.add('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     /** Salva ou Edita Caminhão */
     async function salvarCaminhao() {
         const nome = document.getElementById('nomeCaminhao').value.trim();
@@ -2080,29 +2113,60 @@
         const caminhaoData = { nome, placa };
 
         try {
-            await db.collection("caminhoes").add(caminhaoData);
-            alert('Caminhão salvo com sucesso!');
-            document.getElementById('nomeCaminhao').value = '';
-            document.getElementById('placaCaminhao').value = '';
+            if (caminhaoEmEdicaoId) {
+                // Edição
+                await db.collection("caminhoes").doc(caminhaoEmEdicaoId).update(caminhaoData);
+                alert('Caminhão atualizado com sucesso!');
+            } else {
+                // Novo Cadastro
+                await db.collection("caminhoes").add(caminhaoData);
+                alert('Caminhão salvo com sucesso!');
+            }
+            
+            limparCamposCaminhao();
             carregarCaminhoes();
             carregarOptionsCaminhao(); // Atualiza a lista de seleção
         } catch (error) {
-            console.error("Erro ao salvar caminhão:", error);
-            alert("Erro ao salvar caminhão. Verifique o console.");
+            console.error("Erro ao salvar/atualizar caminhão:", error);
+            alert("Erro ao salvar/atualizar caminhão. Verifique o console.");
         }
     }
 
+    /** Prepara o formulário para edição de um caminhão */
+    async function editarCaminhao(caminhaoId) {
+        try {
+            const doc = await db.collection('caminhoes').doc(caminhaoId).get();
+            if (!doc.exists) {
+                alert('Caminhão não encontrado!');
+                return;
+            }
+            const caminhao = doc.data();
+            
+            caminhaoEmEdicaoId = caminhaoId;
+            document.getElementById('nomeCaminhao').value = caminhao.nome;
+            document.getElementById('placaCaminhao').value = caminhao.placa;
+            document.getElementById('tituloCaminhao').textContent = 'Editar Caminhão';
+            document.getElementById('btnSalvarCaminhao').textContent = '🔄 Atualizar Caminhão';
+            document.getElementById('btnLimparCaminhao').classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' }); // Volta para o formulário
+        } catch (error) {
+            console.error('Erro ao buscar caminhão para edição:', error);
+            alert('Erro ao carregar dados do caminhão para edição.');
+        }
+    }
+
+
     /** Carrega e Exibe Caminhões */
     async function carregarCaminhoes() {
-        const tabela = document.getElementById('caminhoesTable');
-        tabela.innerHTML = '<tr><td colspan="3" class="text-center py-4">Carregando caminhões...</td></tr>';
+        const tabelaBody = document.getElementById('caminhoesTableBody');
+        tabelaBody.innerHTML = '<tr><td colspan="3" class="text-center py-4">Carregando caminhões...</td></tr>';
         
         try {
             const snapshot = await db.collection("caminhoes").orderBy("nome", "asc").get();
-            tabela.innerHTML = ''; // Limpa antes de renderizar
+            tabelaBody.innerHTML = ''; // Limpa antes de renderizar
 
             if (snapshot.empty) {
-                tabela.innerHTML = '<tr><td colspan="3" class="text-center py-4">Nenhum caminhão cadastrado.</td></tr>';
+                tabelaBody.innerHTML = '<tr><td colspan="3" class="text-center py-4">Nenhum caminhão cadastrado.</td></tr>';
                 return;
             }
 
@@ -2110,11 +2174,12 @@
                 const caminhao = doc.data();
                 caminhao.id = doc.id;
 
-                tabela.innerHTML += `
+                tabelaBody.innerHTML += `
                     <tr class="hover:bg-gray-100">
                         <td class="px-6 py-4 whitespace-nowrap">${caminhao.nome}</td>
                         <td class="px-6 py-4 whitespace-nowrap">${caminhao.placa}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                            <button onclick="editarCaminhao('${caminhao.id}')" class="text-blue-600 hover:text-blue-900 mr-2" title="Editar">✏️</button>
                             <button onclick="excluirCaminhao('${caminhao.id}')" class="text-red-600 hover:text-red-900" title="Excluir">🗑️</button>
                         </td>
                     </tr>
@@ -2123,9 +2188,26 @@
 
         } catch (error) {
             console.error("Erro ao carregar caminhões:", error);
-            tabela.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
+            tabelaBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
         }
     }
+
+    /** Excluir Caminhão */
+    async function excluirCaminhao(caminhaoId) {
+        if (!confirm('Tem certeza que deseja excluir este caminhão?')) return;
+        
+        try {
+            await db.collection("caminhoes").doc(caminhaoId).delete(); 
+            
+            alert('Caminhão excluído com sucesso!');
+            carregarCaminhoes(); // Atualiza a tabela
+            carregarOptionsCaminhao(); // Atualiza a lista de seleção
+        } catch (error) {
+            console.error("Erro ao excluir caminhão:", error);
+            alert("Erro ao excluir caminhão. Verifique o console.");
+        }
+    }
+
 
     /** Carrega Caminhões no <select> de Acerto */
     async function carregarOptionsCaminhao() {
@@ -2149,51 +2231,51 @@
 
     /** Ordena Tabela */
     function ordenarTabela(tableId, columnIndex) {
-        const table = document.getElementById(tableId);
+        const tabela = document.getElementById(tableId);
         let switching = true;
         let dir = "asc"; 
         let shouldSwitch;
         let i;
+        
+        const tbody = tabela.querySelector('tbody');
+        if (!tbody) return;
+        const th = tabela.querySelectorAll("th")[columnIndex];
 
-        while (switching) {
-            switching = false;
-            const rows = table.rows;
-            for (i = 0; i < (rows.length - 1); i++) {
-                shouldSwitch = false;
-                const x = rows[i].getElementsByTagName("TD")[columnIndex];
-                const y = rows[i + 1].getElementsByTagName("TD")[columnIndex];
-                
-                let xContent = x.innerHTML.toLowerCase().replace("r$", "").replace(/\./g, "").replace(",", ".");
-                let yContent = y.innerHTML.toLowerCase().replace("r$", "").replace(/\./g, "").replace(",", ".");
-                
-                // Conversão para número para colunas financeiras
-                if (x.className.includes("text-right")) {
-                    xContent = parseFloat(xContent) || 0;
-                    yContent = parseFloat(yContent) || 0;
-                }
+        // 1. Alterna entre asc e desc (usando data-ordem)
+        const ordem = th.dataset.ordem === "asc" ? "desc" : "asc";
+        tabela.querySelectorAll("th").forEach(th => th.removeAttribute("data-ordem"));
+        th.dataset.ordem = ordem;
 
-                if (dir === "asc") {
-                    if (xContent > yContent) {
-                        shouldSwitch= true;
-                        break;
-                    }
-                } else if (dir === "desc") {
-                    if (xContent < yContent) {
-                        shouldSwitch= true;
-                        break;
-                    }
-                }
-            }
-            if (shouldSwitch) {
-                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                switching = true;
+        const linhas = Array.from(tbody.querySelectorAll("tr"));
+
+
+        linhas.sort((a, b) => {
+            const aText = a.children[columnIndex].textContent.trim();
+            const bText = b.children[columnIndex].textContent.trim();
+            
+            let resultado = 0;
+            let isNumeric = a.children[columnIndex].className.includes("text-right");
+            
+            // Tratamento de Data (Colunas 0 e 4 na tabela Caixa, Coluna 2/5 na tabela Acerto)
+            const isDateCol = (tableId === 'caixaTable' && (columnIndex === 0 || columnIndex === 4)) || (tableId === 'acertosTable' && (columnIndex === 2 || columnIndex === 5));
+            
+            if (isDateCol) {
+                // Se for data, usa parseDateBR para obter o timestamp
+                resultado = parseDateBR(aText).getTime() - parseDateBR(bText).getTime();
+            } else if (isNumeric) {
+                // Se for valor, usa parseNumber
+                resultado = parseNumber(aText) - parseNumber(bText);
             } else {
-                if (dir === "asc") {
-                    dir = "desc";
-                    switching = true;
-                }
+                // Para texto, usa localeCompare
+                resultado = aText.localeCompare(bText, 'pt-BR', { numeric: true });
             }
-        }
+
+            return ordem === "asc" ? resultado : -resultado;
+        });
+
+        // 3. Reinsere as linhas ordenadas
+        tbody.innerHTML = "";
+        linhas.forEach(l => tbody.appendChild(l));
     }
 
     /** Inicialização do Sistema (após login) */
@@ -2245,3 +2327,5 @@ function filtrarCaixa() {
     loadAllCaixaAndFilter(); // Chama a função principal de carga e filtro
 }
 </script>
+</body> 
+</html>
