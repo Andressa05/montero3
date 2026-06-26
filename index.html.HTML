@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Gestão de Frotas e Caixa</title>
+    <title>Sistema de Gestão de Compra e Venda de Carros e Caixa</title>
     <!-- Tailwind CSS CDN para estilização moderna e responsiva -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -71,25 +71,23 @@
             border-radius: 4px;
             cursor: crosshair;
             background-color: #fff;
-            /* Garante que o canvas não seja redimensionado pelo CSS, apenas pelo JS */
             touch-action: none; 
         }
         .small-btn {
             @apply px-2 py-1 text-xs rounded transition duration-150;
         }
-
-        /* Oculta colunas da tabela em mobile, se necessário. Aqui não será necessário pois foi substituído por cards em mobile */
-        /* .acertos-tabela-mobile .placa-col, .acertos-tabela-mobile .comissao-col { @apply hidden md:table-cell; } */
     </style>
-    <!-- Firebase V8 CDN (compatível com single HTML file) -->
+    <!-- Firebase V8 CDN -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 </head>
 <body>
 
+<!-- Container de Notificação Dinâmica (Toasts) -->
+<div id="notification-container" class="fixed bottom-5 right-5 z-[2000] flex flex-col gap-2 max-w-sm w-full pointer-events-none"></div>
+
 <!-- --------------------------------------- TELA DE LOGIN --------------------------------------- -->
-<!-- Z-index alto para garantir que fique por cima de qualquer elemento por padrão -->
 <div id="loginPage" class="fixed inset-0 bg-gray-100 items-center justify-center z-[100]"> 
     <div class="bg-white p-8 rounded-lg shadow-xl w-96">
         <h2 class="text-3xl font-bold mb-6 text-center text-blue-700">Login no Sistema</h2>
@@ -111,13 +109,12 @@
 </div>
 
 <!-- --------------------------------------- TELA PRINCIPAL DO SISTEMA --------------------------------------- -->
-<!-- Inicia hidden para garantir que não apareça na tela de login -->
 <div id="appPage" class="app-container hidden">
 
     <!-- Header do Sistema -->
     <header class="header-bg p-4 flex justify-between items-center sticky top-0 z-50">
         <div class="flex items-center">
-            <h1 id="nomeEmpresaHeader" class="text-xl font-bold">Richard Montero</h1>
+            <h1 id="nomeEmpresaHeader" class="text-xl font-bold">Nome da Empresa</h1>
             <button onclick="abrirModalEmpresa()" class="ml-4 text-blue-300 hover:text-white" title="Alterar Nome da Empresa">
                 ✏️
             </button>
@@ -133,13 +130,13 @@
     <nav class="bg-white border-b border-gray-200 sticky top-[68px] z-40">
         <div class="flex">
             <button id="tabAcertos" onclick="changeTab('acertos')" class="nav-link px-6 py-3 text-gray-600 hover:text-blue-700 active">
-                📋 Acertos de Viagem
+                📋 Compra e Venda de Veículos
             </button>
             <button id="tabCaixa" onclick="changeTab('caixa')" class="nav-link px-6 py-3 text-gray-600 hover:text-blue-700">
                 📊 Entrada / Saída (Caixa)
             </button>
             <button id="tabCaminhao" onclick="changeTab('caminhao')" class="nav-link px-6 py-3 text-gray-600 hover:text-blue-700">
-                🚚 Cadastro de Caminhão
+                🚗 Cadastro de Carros
             </button>
         </div>
     </nav>
@@ -155,70 +152,84 @@
             </ul>
         </div>
         
-        <!-- --------------------------------------- ABA: ACERTOS DE VIAGEM --------------------------------------- -->
+        <!-- --------------------------------------- ABA: COMPRA E VENDA DE CARROS --------------------------------------- -->
         <div id="acertos" class="tab-content">
-            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Registro de Acertos de Viagem</h2>
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Registro de Negociações (Compra / Venda)</h2>
             
-            <!-- Formulário de Acerto -->
+            <!-- Formulário de Transação -->
             <div class="bg-gray-50 p-6 rounded-lg shadow-md mb-6">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
-                        <label class="block text-gray-700 mb-1">Motorista <span class="text-red-500">*</span></label>
-                        <input type="text" id="motoristaAcerto" class="w-full border p-2 rounded" placeholder="Nome do Motorista" required>
+                        <label class="block text-gray-700 mb-1">Comprador / Cliente</label>
+                        <input type="text" id="motoristaAcerto" class="w-full border border-gray-300 p-2 rounded transition-all duration-200" placeholder="Ex: Cliente Avulso">
                     </div>
                     <div>
-                        <label class="block text-gray-700 mb-1">Caminhão <span class="text-red-500">*</span></label>
-                        <select id="caminhaoAcerto" class="w-full border p-2 rounded" required>
-                            <option value="">Selecione o Caminhão</option>
+                        <label class="block text-gray-700 mb-1">Carro Negociado (Cadastrado)</label>
+                        <select id="caminhaoAcerto" class="w-full border border-gray-300 p-2 rounded transition-all duration-200">
+                            <option value="">Selecione se já cadastrado... (Opcional)</option>
                             <!-- Opções carregadas via JS -->
                         </select>
                     </div>
                     <div>
-                        <label class="block text-gray-700 mb-1">Valor do Frete <span class="text-red-500">*</span></label>
-                        <input type="text" id="freteAcerto" oninput="formatAndCalculate('freteAcerto')" class="w-full border p-2 rounded text-right" placeholder="R$ 0,00" required>
+                        <label class="block text-gray-700 mb-1">Ou Digite o Modelo do Carro</label>
+                        <input type="text" id="caminhaoManualAcerto" class="w-full border border-gray-300 p-2 rounded transition-all duration-200" placeholder="Ex: Honda Civic LXR 2016 (Livre)">
                     </div>
                     <div>
-                        <label class="block text-gray-700 mb-1">Valor da Comissão <span class="text-red-500">*</span></label>
-                        <input type="text" id="comissaoAcerto" oninput="formatAndCalculate('comissaoAcerto')" class="w-full border p-2 rounded text-right" placeholder="R$ 0,00" required>
+                        <label class="block text-gray-700 mb-1">Valor de Compra</label>
+                        <input type="text" id="freteAcerto" oninput="formatAndCalculate('freteAcerto')" class="w-full border border-gray-300 p-2 rounded text-right font-semibold text-red-600 transition-all duration-200" placeholder="R$ 0,00">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">Valor de Venda (Recebimento)</label>
+                        <input type="text" id="comissaoAcerto" oninput="formatAndCalculate('comissaoAcerto')" class="w-full border border-gray-300 p-2 rounded text-right font-semibold text-green-600 transition-all duration-200" placeholder="R$ 0,00">
                     </div>
                     <div>
                         <label class="block text-gray-700 mb-1">Forma de Pagamento</label>
-                        <input type="text" id="formaPagamentoAcerto" class="w-full border p-2 rounded" placeholder="Ex: PIX, Dinheiro">
+                        <input type="text" id="formaPagamentoAcerto" class="w-full border border-gray-300 p-2 rounded" placeholder="Ex: PIX, Financiamento, Troca">
                     </div>
                     <div>
-                        <label class="block text-gray-700 mb-1">Data da Viagem</label>
-                        <input type="date" id="dataViagemAcerto" class="w-full border p-2 rounded">
+                        <label class="block text-gray-700 mb-1">Data da Negociação</label>
+                        <input type="date" id="dataViagemAcerto" class="w-full border border-gray-300 p-2 rounded transition-all duration-200">
                     </div>
                 </div>
 
                 <div class="mb-4">
-                    <label class="block text-gray-700 mb-1">Observações</label>
-                    <textarea id="observacoesAcerto" class="w-full border p-2 rounded h-20" placeholder="Detalhes da viagem"></textarea>
+                    <label class="block text-gray-700 mb-1">Detalhes / Observações</label>
+                    <textarea id="observacoesAcerto" class="w-full border p-2 rounded h-20" placeholder="Detalhes adicionais da transação (Livre)"></textarea>
                 </div>
 
-                <!-- Despesas da Viagem -->
-                <h3 class="text-lg font-semibold mt-4 mb-2 text-gray-700">Despesas da Viagem</h3>
+                <!-- Despesas de Preparação / Manutenção -->
+                <h3 class="text-lg font-semibold mt-4 mb-2 text-gray-700">Despesas com o Carro (Soma ao Custo)</h3>
                 <div id="containerDespesas" class="space-y-2 mb-4">
                     <!-- Despesas serão adicionadas aqui -->
                 </div>
                 <div class="flex space-x-2">
-                    <input type="text" id="descricaoDespesa" class="border p-2 rounded flex-grow" placeholder="Descrição da Despesa">
+                    <input type="text" id="descricaoDespesa" class="border p-2 rounded flex-grow" placeholder="Ex: Pintura, Troca de Óleo, Pneus">
                     <input type="text" id="valorDespesa" oninput="formatMoeda(this.id)" class="border p-2 rounded w-40 text-right" placeholder="R$ 0,00">
                     <button onclick="adicionarDespesa()" class="bg-green-600 hover:bg-green-700 text-white p-2 rounded">
-                        ➕ Adicionar
+                        ➕ Adicionar Despesa
                     </button>
                 </div>
 
-                <!-- Sobra Calculada -->
-                <div class="mt-6 p-4 data-card flex justify-between items-center">
-                    <span class="font-bold text-lg text-blue-800">Sobra da Viagem:</span>
-                    <span id="sobraAcerto" class="font-bold text-xl text-green-700">R$ 0,00</span>
+                <!-- Resumo dos Custos e Lucro -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                    <div class="p-4 bg-red-50 rounded-lg border-l-4 border-red-500 flex justify-between items-center">
+                        <span class="font-bold text-sm text-red-800">Custo de Compra:</span>
+                        <span id="resumoCompraBase" class="font-bold text-lg text-red-700">R$ 0,00</span>
+                    </div>
+                    <div class="p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-500 flex justify-between items-center">
+                        <span class="font-bold text-sm text-yellow-800">Custo Total (Compra + Despesas):</span>
+                        <span id="custoTotalCalculado" class="font-bold text-lg text-yellow-700">R$ 0,00</span>
+                    </div>
+                    <div class="p-4 bg-green-50 rounded-lg border-l-4 border-green-500 flex justify-between items-center">
+                        <span class="font-bold text-sm text-green-800">Lucro Estimado:</span>
+                        <span id="sobraAcerto" class="font-bold text-xl text-green-700">R$ 0,00</span>
+                    </div>
                 </div>
 
                 <!-- Botões de Ação -->
                 <div class="mt-6 flex space-x-4">
                     <button onclick="salvarAcerto()" class="button-primary text-white p-3 rounded font-semibold flex-grow">
-                        💾 Salvar Acerto
+                        💾 Salvar Negociação
                     </button>
                     <button onclick="limparCamposAcerto()" class="bg-gray-400 hover:bg-gray-500 text-white p-3 rounded font-semibold w-28">
                         🧼 Limpar
@@ -228,8 +239,8 @@
 
             <hr class="my-6">
 
-            <!-- Relatório e Filtros de Acerto -->
-            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Acertos Registrados</h2>
+            <!-- Relatório e Filtros de Negociações -->
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Negociações Registradas</h2>
             
             <div class="flex space-x-4 mb-4 items-end">
                 <div>
@@ -245,54 +256,55 @@
                 </button>
             </div>
 
-            <!-- Totais de Acerto -->
+            <!-- Totais de Negociações -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div class="data-card p-3 rounded-lg">
-                    <p class="text-sm text-gray-600">Total Frete:</p>
-                    <p id="totalFreteAcerto" class="text-lg font-bold text-blue-800">R$ 0,00</p>
+                    <p class="text-sm text-gray-600">Total Pago em Compras:</p>
+                    <p id="totalFreteAcerto" class="text-lg font-bold text-red-700">R$ 0,00</p>
                 </div>
                 <div class="data-card p-3 rounded-lg">
-                    <p class="text-sm text-gray-600">Total Comissão:</p>
-                    <p id="totalComissaoAcerto" class="text-lg font-bold text-red-600">R$ 0,00</p>
+                    <p class="text-sm text-gray-600">Total em Despesas:</p>
+                    <p id="totalDespesasAcerto" class="text-lg font-bold text-yellow-600">R$ 0,00</p>
                 </div>
                 <div class="data-card p-3 rounded-lg">
-                    <p class="text-sm text-gray-600">Total Despesas:</p>
-                    <p id="totalDespesasAcerto" class="text-lg font-bold text-red-600">R$ 0,00</p>
+                    <p class="text-sm text-gray-600">Total Recebido em Vendas:</p>
+                    <p id="totalComissaoAcerto" class="text-lg font-bold text-green-700">R$ 0,00</p>
                 </div>
                 <div class="data-card p-3 rounded-lg">
-                    <p class="text-sm text-gray-600">Total Sobra:</p>
-                    <p id="totalSobraAcerto" class="text-lg font-bold text-green-700">R$ 0,00</p>
+                    <p class="text-sm text-gray-600">Lucro Total Realizado:</p>
+                    <p id="totalSobraAcerto" class="text-lg font-bold text-blue-800">R$ 0,00</p>
                 </div>
             </div>
 
-            <!-- Tabela de Acertos (Desktop) -->
+            <!-- Tabela de Negociações (Desktop) -->
             <div class="hidden md:block overflow-x-auto bg-white p-4 rounded-lg shadow">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 0)">Motorista</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Caminhão</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 2)">Frete</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 3)">Comissão</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 4)">Despesas</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 5)">Sobra</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 0)">Cliente</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Carro</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 2)">Compra Base</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 3)">Despesas (+)</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 4)">Custo Total</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 5)">Valor Venda</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase cursor-pointer" onclick="ordenarTabela('acertosTable', 6)">Lucro Líquido</th>
                             <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="acertosTable" class="bg-white divide-y divide-gray-200">
-                        <!-- Linhas de acerto serão injetadas aqui -->
+                        <!-- Linhas de transação serão injetadas aqui -->
                     </tbody>
                 </table>
             </div>
 
-            <!-- Lista de Acertos (Mobile/Cards) -->
+            <!-- Lista de Negociações (Mobile/Cards) -->
             <div id="acertosMobileList" class="md:hidden space-y-4">
-                <!-- Cards de acerto serão injetados aqui (mobile) -->
+                <!-- Cards serão injetados aqui -->
             </div>
             
             <div class="mt-4 flex justify-end">
                 <button onclick="gerarRelatorioAcertoPDF()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold">
-                    📤 Relatório PDF (Acertos)
+                    📤 Exportar PDF (Negociações)
                 </button>
             </div>
         </div>
@@ -303,7 +315,7 @@
 
             <!-- Formulário de Lançamento Manual -->
             <div class="bg-gray-50 p-6 rounded-lg shadow-md mb-6">
-                <h3 class="text-lg font-semibold text-gray-700 mb-4">Lançamentos</h3>
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Lançamentos Manuais</h3>
                 <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                     <div>
                         <label class="block text-gray-700 mb-1">Tipo <span class="text-red-500">*</span></label>
@@ -322,13 +334,13 @@
                     </div>
                     <div>
                         <label class="block text-gray-700 mb-1">Categoria</label>
-                        <input type="text" id="categoriaCaixa" class="w-full border p-2 rounded" placeholder="Ex: Oficina, cartão">
+                        <input type="text" id="categoriaCaixa" class="w-full border p-2 rounded" placeholder="Ex: Oficina, Comissão, Documentação">
                     </div>
                 </div>
 
                 <div class="mb-4">
                     <label class="block text-gray-700 mb-1">Descrição</label>
-                    <textarea id="descricaoCaixa" class="w-full border p-2 rounded h-16" placeholder="Descrição detalhada do lançamento, nome lugar, nome banco"></textarea>
+                    <textarea id="descricaoCaixa" class="w-full border p-2 rounded h-16" placeholder="Descrição detalhada do lançamento"></textarea>
                 </div>
 
                 <!-- Opções de Parcelamento (Saída) -->
@@ -377,7 +389,6 @@
                     <button onclick="salvarLancamentoCaixa()" class="button-primary text-white p-3 rounded font-semibold flex-grow">
                         💾 Salvar Lançamento
                     </button>
-                    <!-- Novo botão para Sugestão de Categoria via Gemini -->
                     <button onclick="sugerirCategoria()" class="bg-yellow-500 hover:bg-yellow-600 text-white p-3 rounded font-semibold w-40">
                         ✨ Sugerir Categoria
                     </button>
@@ -390,7 +401,6 @@
             <h3 class="text-xl font-semibold text-gray-700 mb-4">Filtros e Relatórios</h3>
             <div class="bg-white p-4 rounded-lg shadow mb-6">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
-                    <!-- Filtro por Mês (Checkbox e Mês) -->
                     <div class="col-span-2 flex flex-col md:flex-row items-end space-y-2 md:space-y-0 md:space-x-4">
                         <div>
                             <label class="block text-gray-700 mb-1">Mês de Análise</label>
@@ -406,7 +416,6 @@
                         </div>
                     </div>
                     
-                    <!-- Filtro por Data Personalizada -->
                     <div class="col-span-2 grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-gray-700 mb-1">Data Início</label>
@@ -432,15 +441,15 @@
             <!-- Totais e Saldo -->
             <div class="grid grid-cols-3 gap-4 mb-6">
                 <div class="data-card p-3 rounded-lg">
-                    <p class="text-sm text-gray-600">Total Entradas (Mês/Período):</p>
+                    <p class="text-sm text-gray-600">Total Entradas (Período):</p>
                     <p id="totalEntradasCaixa" class="text-lg font-bold text-green-700">R$ 0,00</p>
                 </div>
                 <div class="data-card p-3 rounded-lg">
-                    <p class="text-sm text-gray-600">Total Saídas (Vencidas/Pagas):</p>
+                    <p class="text-sm text-gray-600">Total Saídas (Período):</p>
                     <p id="totalSaidasCaixa" class="text-lg font-bold text-red-600">R$ 0,00</p>
                 </div>
                 <div class="data-card p-3 rounded-lg">
-                    <p class="text-sm text-gray-600">Saldo no Mês/Período:</p>
+                    <p class="text-sm text-gray-600">Saldo Líquido:</p>
                     <p id="saldoAtualCaixa" class="text-lg font-bold text-blue-800">R$ 0,00</p>
                 </div>
             </div>
@@ -459,34 +468,32 @@
                         </tr>
                     </thead>
                     <tbody id="caixaTable" class="bg-white divide-y divide-gray-200">
-                        <!-- Lançamentos serão injetados aqui -->
                         <tr><td colspan="6" class="text-center py-4">Carregando dados...</td></tr>
                     </tbody>
                 </table>
             </div>
-
         </div>
 
-        <!-- --------------------------------------- ABA: CADASTRO DE CAMINHÃO --------------------------------------- -->
+        <!-- --------------------------------------- ABA: CADASTRO DE CARRO --------------------------------------- -->
         <div id="caminhao" class="tab-content hidden">
-            <h2 class="text-2xl font-semibold text-blue-700 mb-4" id="tituloCaminhao">Cadastro de Caminhões</h2>
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4" id="tituloCaminhao">Cadastro de Veículos (Carros)</h2>
 
-            <!-- Formulário de Cadastro de Caminhão -->
+            <!-- Formulário de Cadastro de Carro -->
             <div class="bg-gray-50 p-6 rounded-lg shadow-md mb-6">
                 <input type="hidden" id="caminhaoEmEdicaoId">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label class="block text-gray-700 mb-1">Nome do Caminhão <span class="text-red-500">*</span></label>
-                        <input type="text" id="nomeCaminhao" class="w-full border p-2 rounded" placeholder="Ex: Volvo FH 540" required>
+                        <label class="block text-gray-700 mb-1">Marca / Modelo do Carro</label>
+                        <input type="text" id="nomeCaminhao" class="w-full border p-2 rounded" placeholder="Ex: Toyota Corolla XEI 2.0 (Livre)">
                     </div>
                     <div>
-                        <label class="block text-gray-700 mb-1">Placa do Caminhão (Brasil) <span class="text-red-500">*</span></label>
-                        <input type="text" id="placaCaminhao" oninput="formatPlaca(this)" maxlength="8" class="w-full border p-2 rounded uppercase" placeholder="AAA-1234 (Mercosul: AAA1B23)">
+                        <label class="block text-gray-700 mb-1">Placa do Veículo</label>
+                        <input type="text" id="placaCaminhao" oninput="formatPlaca(this)" maxlength="8" class="w-full border p-2 rounded uppercase" placeholder="AAA-1234 (Livre)">
                     </div>
                 </div>
                 <div class="flex space-x-4">
                     <button onclick="salvarCaminhao()" class="button-primary text-white p-3 rounded font-semibold flex-grow" id="btnSalvarCaminhao">
-                        💾 Salvar Caminhão
+                        💾 Salvar Veículo
                     </button>
                     <button onclick="limparCamposCaminhao()" class="bg-gray-400 hover:bg-gray-500 text-white p-3 rounded font-semibold w-28 hidden" id="btnLimparCaminhao">
                         🧼 Limpar
@@ -496,23 +503,22 @@
 
             <hr class="my-6">
 
-            <!-- Tabela de Caminhões -->
-            <h3 class="text-xl font-semibold text-gray-700 mb-4">Caminhões Cadastrados</h3>
+            <!-- Tabela de Carros -->
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Veículos em Estoque / Cadastrados</h3>
             <div class="overflow-x-auto bg-white p-4 rounded-lg shadow">
                 <table id="caminhoesTable" class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modelo</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Placa</th>
                             <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="caminhoesTableBody" class="bg-white divide-y divide-gray-200">
-                        <!-- Caminhões serão injetados aqui -->
+                        <!-- Carros serão injetados aqui -->
                     </tbody>
                 </table>
             </div>
-
         </div>
 
     </main>
@@ -524,7 +530,7 @@
 <div id="modalEmpresa" class="modal-overlay hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center">
     <div class="bg-white rounded-lg p-6 w-96 shadow-xl">
         <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-semibold text-gray-900">✏️ Alterar Nome da Empresa</h3>
+            <h3 class="text-lg font-semibold text-gray-900">✏️ Alterar Nome do Estabelecimento</h3>
             <button onclick="fecharModalEmpresa()" class="text-gray-500 hover:text-red-500">✖</button>
         </div>
         <input id="novoNomeEmpresa" type="text" placeholder="Digite o novo nome" class="w-full border rounded p-3 mb-4">
@@ -534,73 +540,72 @@
     </div>
 </div>
 
-<!-- Modal: Resumo Detalhado da Viagem -->
+<!-- Modal: Resumo Detalhado da Transação -->
 <div id="modalResumoViagem" class="modal-overlay hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center">
     <div class="bg-white rounded-lg p-8 w-11/12 max-w-lg shadow-xl">
         <div class="flex justify-between items-center mb-6 border-b pb-2">
-            <h3 class="text-xl font-bold text-blue-700">👁️ Resumo Detalhado da Viagem</h3>
+            <h3 class="text-xl font-bold text-blue-700">👁️ Detalhes da Negociação do Veículo</h3>
             <button onclick="fecharModalResumoViagem()" class="text-gray-500 hover:text-red-500">✖</button>
         </div>
         
         <div id="resumoViagemContent" class="space-y-2 text-gray-700 text-sm">
-            <p><strong>Data:</strong> <span id="resumoData"></span></p>
-            <p><strong>Motorista:</strong> <span id="resumoMotorista"></span></p>
-            <p><strong>Caminhão:</strong> <span id="resumoCaminhao"></span></p>
-            <p><strong>Frete:</strong> <span id="resumoFrete" class="font-bold text-blue-700"></span></p>
-            <p><strong>Comissão:</strong> <span id="resumoComissao" class="font-bold text-red-600"></span></p>
+            <p><strong>Data da Transação:</strong> <span id="resumoData"></span></p>
+            <p><strong>Comprador/Cliente:</strong> <span id="resumoMotorista"></span></p>
+            <p><strong>Veículo:</strong> <span id="resumoCaminhao"></span></p>
+            <p><strong>Valor Pago na Compra:</strong> <span id="resumoFrete" class="font-bold text-red-600"></span></p>
+            <p><strong>Preço de Venda:</strong> <span id="resumoComissao" class="font-bold text-green-700"></span></p>
             <p><strong>Forma de Pagamento:</strong> <span id="resumoFormaPagamento"></span></p>
             
             <div class="mt-4 pt-4 border-t">
-                <h4 class="font-bold mb-1">Despesas:</h4>
+                <h4 class="font-bold mb-1">Despesas com Manutenção / Preparação:</h4>
                 <ul id="resumoListaDespesas" class="list-disc space-y-1 text-xs pl-4">
-                    <!-- Despesas Detalhadas aqui -->
+                    <!-- Detalhamento de Despesas -->
                 </ul>
-                <p class="mt-2 text-sm"><strong>Total Despesas:</strong> <span id="resumoTotalDespesas" class="font-bold text-red-600"></span></p>
+                <p class="mt-2 text-sm"><strong>Total Acumulado de Despesas:</strong> <span id="resumoTotalDespesas" class="font-bold text-yellow-600"></span></p>
             </div>
 
-            <div class="mt-4 pt-4 border-t">
-                <p class="text-lg"><strong>SOBRA:</strong> <span id="resumoSobra" class="font-bold text-green-700"></span></p>
+            <div class="mt-4 pt-4 border-t bg-gray-50 p-3 rounded">
+                <p><strong>CUSTO TOTAL DO CARRO (Compra + Despesas):</strong> <span id="resumoCustoTotal" class="font-bold text-red-600"></span></p>
+                <p class="text-lg mt-1"><strong>LUCRO REAL:</strong> <span id="resumoSobra" class="font-bold text-green-700"></span></p>
             </div>
 
             <p class="mt-4 text-xs italic">Observações: <span id="resumoObservacoes"></span></p>
         </div>
 
         <button onclick="fecharModalResumoViagem()" class="mt-6 bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded w-full">
-            OK
+            Fechar Resumo
         </button>
     </div>
 </div>
 
-<!-- Modal: Assinaturas para Recibo -->
+<!-- Modal: Assinaturas para Recibo de Venda -->
 <div id="modalAssinaturaRecibo" class="modal-overlay hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center">
     <div class="bg-white rounded-lg p-6 w-11/12 max-w-2xl shadow-xl">
         <div class="flex justify-between items-center mb-6 border-b pb-2">
-            <h3 class="text-xl font-bold text-blue-700">✍️ Assinaturas para o Recibo</h3>
+            <h3 class="text-xl font-bold text-blue-700">✍️ Assinaturas para o Recibo de Compra e Venda</h3>
             <button onclick="fecharModalAssinaturaRecibo()" class="text-gray-500 hover:text-red-500">✖</button>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="block text-gray-700 mb-2">Assinatura do Motorista:</label>
-                <!-- Alterado o height para ser flexível em mobile -->
+                <label class="block text-gray-700 mb-2">Assinatura do Comprador:</label>
                 <canvas id="canvasMotorista" class="signature-canvas w-full h-32"></canvas>
                 <button onclick="limparAssinatura('Motorista')" class="button-danger text-white px-4 py-2 rounded w-full mt-2">
-                    <span class="mr-1">🧼</span> Limpar Assinatura
+                    <span class="mr-1">🧼</span> Limpar
                 </button>
             </div>
             <div>
-                <label class="block text-gray-700 mb-2">Assinatura do Proprietário:</label>
-                <!-- Alterado o height para ser flexível em mobile -->
+                <label class="block text-gray-700 mb-2">Assinatura do Vendedor (Loja):</label>
                 <canvas id="canvasProprietario" class="signature-canvas w-full h-32"></canvas>
                 <button onclick="limparAssinatura('Proprietario')" class="button-danger text-white px-4 py-2 rounded w-full mt-2">
-                    <span class="mr-1">🧼</span> Limpar Assinatura
+                    <span class="mr-1">🧼</span> Limpar
                 </button>
             </div>
         </div>
 
         <div class="mt-6 flex space-x-4">
             <button onclick="salvarAssinaturasEGerarRecibo()" class="button-primary text-white p-3 rounded font-semibold flex-grow">
-                💾 Salvar Assinaturas e Gerar Recibo
+                💾 Confirmar e Visualizar Recibo
             </button>
             <button onclick="fecharModalAssinaturaRecibo()" class="bg-gray-400 hover:bg-gray-500 text-white p-3 rounded font-semibold w-28">
                 Cancelar
@@ -609,35 +614,31 @@
     </div>
 </div>
 
-<!-- Modal: Recibo de Acerto (para visualização final/PDF) - Adicionado ID para PDF -->
+<!-- Modal: Recibo de Venda (para visualização final/PDF) -->
 <div id="modalRecibo" class="modal-overlay hidden fixed inset-0 bg-gray-900 bg-opacity-50 items-center justify-center">
-    <!-- Reduzida a largura para caber melhor no A4 -->
     <div class="bg-white rounded-lg p-8 w-11/12 max-w-sm shadow-xl"> 
         <div class="flex justify-between items-center mb-6 border-b pb-2">
-            <h3 class="text-xl font-bold text-blue-700">📄 Recibo de Acerto</h3>
+            <h3 class="text-xl font-bold text-blue-700">📄 Comprovante de Negociação</h3>
             <button onclick="fecharModalRecibo()" class="text-gray-500 hover:text-red-500">✖</button>
         </div>
         
-        <!-- Adicionado ID "reciboParaPDF" para html2canvas capturar o conteúdo -->
         <div id="reciboParaPDF" class="space-y-3 text-gray-700">
-            <!-- Conteúdo do recibo será injetado aqui -->
-            <p><strong>Empresa:</strong> <span id="reciboEmpresa"></span></p>
-            <p><strong>Motorista:</strong> <span id="reciboMotorista"></span></p>
-            <p><strong>Caminhão:</strong> <span id="reciboCaminhao"></span></p>
-            <p><strong>Data da Viagem:</strong> <span id="reciboData"></span></p>
-            <p><strong>Valor da Comissão:</strong> <span id="reciboComissao" class="font-bold text-red-600"></span></p>
+            <p><strong>Loja/Empresa:</strong> <span id="reciboEmpresa"></span></p>
+            <p><strong>Cliente:</strong> <span id="reciboMotorista"></span></p>
+            <p><strong>Veículo:</strong> <span id="reciboCaminhao"></span></p>
+            <p><strong>Data da Negociação:</strong> <span id="reciboData"></span></p>
+            <p><strong>Valor Total da Transação:</strong> <span id="reciboComissao" class="font-bold text-green-700"></span></p>
             <p><strong>Observações:</strong> <span id="reciboObservacoes"></span></p>
             
-            <!-- Assinaturas injetadas aqui -->
             <div class="mt-8 pt-8 border-t border-dashed">
                 <div class="grid grid-cols-2 gap-4 text-center">
                     <div>
                         <img id="reciboAssMotorista" class="w-full h-16 border-b border-gray-400 object-contain mx-auto mb-1" src="">
-                        <p class="text-sm">Assinatura do Motorista</p>
+                        <p class="text-sm">Assinatura Comprador</p>
                     </div>
                     <div>
                         <img id="reciboAssProprietario" class="w-full h-16 border-b border-gray-400 object-contain mx-auto mb-1" src="">
-                        <p class="text-sm">Assinatura do Proprietário</p>
+                        <p class="text-sm">Assinatura Vendedor</p>
                     </div>
                 </div>
             </div>
@@ -648,7 +649,7 @@
         </div>
 
         <button onclick="gerarReciboPDF()" class="mt-6 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">
-            Imprimir Recibo
+            Imprimir Comprovante (PDF)
         </button>
     </div>
 </div>
@@ -672,7 +673,6 @@
             <textarea id="editDescricaoCaixa" class="w-full border p-2 rounded h-16"></textarea>
         </div>
         
-        <!-- Edição de Parcelas (Simplificada) -->
         <div id="editOpcoesParcela" class="hidden bg-gray-100 p-4 rounded-lg shadow-inner mb-4">
             <h4 class="font-semibold mb-2">Detalhes da Parcela <span id="editParcAtual">1</span> de <span id="editParcTotal">1</span>:</h4>
             <div class="flex space-x-4">
@@ -695,7 +695,6 @@
 
 
 <!-- --------------------------------------- SCRIPTS --------------------------------------- -->
-<!-- Importações de PDF atualizadas: jsPDF + html2canvas para melhor renderização de HTML -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
@@ -718,26 +717,55 @@
     let despesasViagem = [];
     let acertoEmEdicaoId = null;
     let lancamentoEmEdicaoId = null;
-    let caminhaoEmEdicaoId = null; // Variável para rastrear o caminhão em edição
+    let caminhaoEmEdicaoId = null; 
     let canvasMotorista, ctxMotorista, isDrawingMotorista = false;
     let canvasProprietario, ctxProprietario, isDrawingProprietario = false;
-    let acertoAtualData = null; // Para armazenar dados do acerto para o resumo/recibo
-    window.caixaItems = []; // Array global para armazenar todos os itens do caixa
-    
+    let acertoAtualData = null; 
+    window.caixaItems = []; 
+    const apiKey = ""; // Chave do Gemini injetada em ambiente de execução
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
     // ----------------------------------------------------
     // # FUNÇÕES DE UTILIDADE E FORMATAÇÃO
     // ----------------------------------------------------
     
-    // ----------------- Helpers (Início do bloco) -----------------
-    
+    // Função para exibir alertas e erros de forma elegante sem usar alert()
+    function showNotification(message, type = 'error') {
+        const container = document.getElementById('notification-container');
+        if (!container) return;
+
+        const toast = document.createElement('div');
+        toast.className = `p-4 rounded-lg shadow-lg text-white pointer-events-auto transition-all duration-300 transform translate-y-2 opacity-0 flex justify-between items-center ${
+            type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-blue-600'
+        }`;
+        
+        toast.innerHTML = `
+            <div class="flex items-center space-x-2">
+                <span>${type === 'error' ? '⚠️' : type === 'success' ? '✅' : 'ℹ️'}</span>
+                <span class="font-semibold text-sm">${message}</span>
+            </div>
+            <button class="text-white hover:text-gray-200 ml-4 focus:outline-none font-bold" onclick="this.parentElement.remove()">✕</button>
+        `;
+
+        container.appendChild(toast);
+
+        // Ativa a animação de entrada
+        setTimeout(() => {
+            toast.classList.remove('translate-y-2', 'opacity-0');
+        }, 50);
+
+        // Auto-destruição após 6 segundos
+        setTimeout(() => {
+            toast.classList.add('opacity-0', 'translate-y-2');
+            setTimeout(() => toast.remove(), 300);
+        }, 6000);
+    }
+
     function parseNumber(value) {
       if (value === null || value === undefined) return 0;
       if (typeof value === 'number') return value;
       let s = String(value).trim();
-      // remove R$ e espaços
-      s = s.replace(/[R$\s]/g,'');
-      // se tem ponto e vírgula, trata milhares e decimais
+      s = s.replace(/[R$\s\u00A0]/g,''); // Substitui também espaços rígidos do BRL
       if (s.indexOf('.') > -1 && s.indexOf(',') > -1) {
         s = s.replace(/\./g,'').replace(',', '.');
       } else {
@@ -747,19 +775,15 @@
       return isNaN(n) ? 0 : n;
     }
 
-    // NOVA FUNÇÃO PARA ORDENAÇÃO DE DATAS
     function parseDateBR(value) {
         if (!value) return new Date(0);
-        // Tenta extrair a parte da data e remover o status "(Vencido)", "(Pago)", etc.
         const datePart = value.split(' ')[0];
         const [dia, mes, ano] = datePart.split('/');
         if (!dia || !mes || !ano) return new Date(0);
-        // Cria a data no formato YYYY-MM-DD para evitar problemas de fuso/locale (startOfDay)
         return new Date(parseInt(ano, 10), parseInt(mes, 10) - 1, parseInt(dia, 10));
     }
     
     function parseLocalDateFromInput(value) {
-      // value esperado "YYYY-MM-DD" (input type=date)
       if (!value) return null;
       if (typeof value !== 'string') {
         const d = new Date(value);
@@ -767,20 +791,16 @@
       }
       const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (m) return new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
-      // fallback
       const d = new Date(value);
       return isNaN(d) ? null : d;
     }
     
     function toDate(v) {
       if (!v) return null;
-      // Firestore Timestamp
       if (typeof v === 'object' && typeof v.toDate === 'function') {
-        try { return v.toDate(); } catch(e) { /* fallback */ }
+        try { return v.toDate(); } catch(e) {}
       }
-      // epoch number
       if (typeof v === 'number') return new Date(v);
-      // string ISO or YYYY-MM-DD or dd/mm/yyyy
       if (typeof v === 'string') {
         const s = v.trim();
         if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return parseLocalDateFromInput(s);
@@ -792,7 +812,6 @@
         if (!isNaN(d)) return d;
         return null;
       }
-      // Date object?
       if (v instanceof Date) return v;
       return null;
     }
@@ -809,20 +828,18 @@
       return true;
     }
     
-    // NOVO HELPER: Normaliza data para comparação (zera hora/minuto/segundo)
     function normalizeToDate(date) {
         if (!date) return null;
-        const d = toDate(date); // Usa a função toDate existente para converter
+        const d = toDate(date);
         if (!d || isNaN(d)) return null;
-        d.setHours(0, 0, 0, 0); // zera hora, minuto e segundo
+        d.setHours(0, 0, 0, 0);
         return d;
     }
-
 
     /** Formata número para moeda BRL em tempo real */
     function formatMoeda(elementId) {
         const input = document.getElementById(elementId);
-        let value = input.value.replace(/\D/g, ""); // Remove tudo que não é dígito
+        let value = input.value.replace(/\D/g, "");
         
         if (value.length > 0) {
             value = (parseInt(value) / 100).toFixed(2).replace(".", ",");
@@ -831,36 +848,28 @@
         } else {
             input.value = "";
         }
-        // Dispara cálculo automático se for campo de acerto
         if (elementId === 'freteAcerto' || elementId === 'comissaoAcerto') {
             calcularSobra();
         }
     }
 
-    /** Dispara o cálculo de sobra após formatação de moeda */
     function formatAndCalculate(elementId) {
         formatMoeda(elementId);
         calcularSobra();
     }
 
-    /** Converte string de moeda BRL (R$ 1.234,56) para float (1234.56) */
     function currencyToFloat(currency) {
         if (!currency) return 0;
-        // Tenta remover R$, pontos de milhar e substitui vírgula por ponto decimal
         return parseNumber(currency);
     }
     
-    /** Formata float (1234.56) para string BRL (R$ 1.234,56) */
     function floatToCurrency(float) {
-        // Se o float for NaN, retorna R$ 0,00 para evitar R$ NaN
         if (isNaN(float)) return "R$ 0,00"; 
         return formatBRL(float);
     }
     
-    /** Formata data YYYY-MM-DD para DD/MM/YYYY */
     function formatDateBR(dateString) {
         if (!dateString) return '';
-        // Assumindo que a entrada é YYYY-MM-DD
         const parts = dateString.split('-');
         if (parts.length === 3) {
             return `${parts[2]}/${parts[1]}/${parts[0]}`;
@@ -868,13 +877,11 @@
         return dateString;
     }
 
-    /** Formata placa de carro (AAA1234, AAAB123) */
     function formatPlaca(input) {
         let value = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
         let formatted = '';
         if (value.length > 3) {
             formatted = value.substring(0, 3);
-            // Adiciona hífen para padrão antigo (AAA-1234) ou Mercosul (AAA1B23)
             if (value.length >= 7) {
                  formatted += '-' + value.substring(3, 7);
             } else if (value.length > 3) {
@@ -891,7 +898,6 @@
     // # FUNÇÕES DE TELA (LOGIN, TABS, MODAIS)
     // ----------------------------------------------------
 
-    /** Login Fixo com localStorage */
     function handleLogin() {
         const usuario = document.getElementById("usuario").value;
         const senha = document.getElementById("senha").value;
@@ -900,23 +906,18 @@
             localStorage.setItem("usuarioLogado", "true");
             document.getElementById("loginPage").style.display = "none";
             document.getElementById("appPage").classList.remove("hidden");
-            // Inicia o carregamento dos dados após o login
             initSystem(); 
         } else {
-            // Usando console.log em vez de alert para não travar o ambiente
-            console.error("Usuário ou senha inválidos!");
-            // Exibir mensagem de erro na tela, se possível
+            showNotification("Usuário ou senha inválidos!", "error");
         }
     }
 
-    /** Logout */
     function handleLogout() {
         localStorage.removeItem("usuarioLogado");
         document.getElementById("loginPage").style.display = "flex";
         document.getElementById("appPage").classList.add("hidden");
     }
 
-    /** Exibir/Ocultar Senha */
     function toggleSenha() {
         const senhaInput = document.getElementById("senha");
         const iconSpan = document.getElementById("toggleIcon");
@@ -929,7 +930,6 @@
         }
     }
 
-    /** Troca de Abas */
     function changeTab(tabName) {
         document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
         document.getElementById(tabName).classList.remove('hidden');
@@ -937,13 +937,11 @@
         document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
         document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).classList.add('active');
 
-        // Recarrega dados específicos da aba
         if (tabName === 'acertos') carregarAcertos();
-        if (tabName === 'caixa') loadAllCaixaAndFilter(); // Chamada principal de carga do caixa
+        if (tabName === 'caixa') loadAllCaixaAndFilter(); 
         if (tabName === 'caminhao') carregarCaminhoes();
     }
 
-    /** Modal Empresa */
     function abrirModalEmpresa() {
         document.getElementById("modalEmpresa").classList.remove("hidden");
         document.getElementById("modalEmpresa").style.display = "flex";
@@ -961,29 +959,25 @@
         }
     }
 
-    /** Modal Recibo */
     function fecharModalRecibo() {
         document.getElementById('modalRecibo').classList.add('hidden');
         document.getElementById('modalRecibo').style.display = "none";
     }
 
-    /** Modal Resumo Viagem */
     function fecharModalResumoViagem() {
         document.getElementById('modalResumoViagem').classList.add('hidden');
         document.getElementById('modalResumoViagem').style.display = "none";
     }
     
-    /** Modal Assinatura */
     function fecharModalAssinaturaRecibo() {
         document.getElementById('modalAssinaturaRecibo').classList.add('hidden');
         document.getElementById('modalAssinaturaRecibo').style.display = "none";
     }
 
     // ----------------------------------------------------
-    // # LÓGICA DO ACERTO DE VIAGEM (ABA ACERTOS)
+    // # LÓGICA DE COMPRA E VENDA (ABA ACERTOS)
     // ----------------------------------------------------
 
-    /** Adiciona despesa à lista temporária */
     function adicionarDespesa() {
         const descricao = document.getElementById('descricaoDespesa').value.trim();
         const valorStr = document.getElementById('valorDespesa').value;
@@ -996,11 +990,10 @@
             document.getElementById('descricaoDespesa').value = '';
             document.getElementById('valorDespesa').value = '';
         } else {
-            console.error('Preencha a descrição e o valor da despesa.');
+            showNotification("Preencha a descrição e o valor da despesa.", "error");
         }
     }
 
-    /** Renderiza a lista de despesas na tela */
     function renderizarDespesas() {
         const container = document.getElementById('containerDespesas');
         container.innerHTML = despesasViagem.map((d, index) => `
@@ -1016,137 +1009,130 @@
         `).join('');
     }
 
-    /** Exclui despesa da lista temporária */
     function excluirDespesa(index) {
         despesasViagem.splice(index, 1);
         renderizarDespesas();
         calcularSobra();
     }
 
-    /** Calcula a Sobra em tempo real */
     function calcularSobra() {
-        const frete = currencyToFloat(document.getElementById('freteAcerto').value);
-        const comissao = currencyToFloat(document.getElementById('comissaoAcerto').value);
+        const compra = currencyToFloat(document.getElementById('freteAcerto').value);
+        const venda = currencyToFloat(document.getElementById('comissaoAcerto').value);
         const totalDespesas = despesasViagem.reduce((sum, d) => sum + d.valor, 0);
 
-        const sobra = frete - comissao - totalDespesas;
-        document.getElementById('sobraAcerto').textContent = floatToCurrency(sobra);
+        const custoTotal = compra + totalDespesas;
+        const lucroEstimado = venda - custoTotal;
+
+        document.getElementById('resumoCompraBase').textContent = floatToCurrency(compra);
+        document.getElementById('custoTotalCalculado').textContent = floatToCurrency(custoTotal);
+        document.getElementById('sobraAcerto').textContent = floatToCurrency(lucroEstimado);
     }
 
-    /** Salva ou Edita Acerto e Lança Automaticamente no Caixa */
-    async function salvarAcerto() {
-        const motorista = document.getElementById('motoristaAcerto').value.trim();
-        const caminhaoId = document.getElementById('caminhaoAcerto').value;
-        const frete = currencyToFloat(document.getElementById('freteAcerto').value);
-        const comissao = currencyToFloat(document.getElementById('comissaoAcerto').value);
-        const formaPagamento = document.getElementById('formaPagamentoAcerto').value.trim();
-        const observacoes = document.getElementById('observacoesAcerto').value.trim();
-        const dataViagem = document.getElementById('dataViagemAcerto').value;
-        const sobra = currencyToFloat(document.getElementById('sobraAcerto').textContent);
+    // Limpa os estilos de erro de validação
+    function clearValidationStyles() {
+        const fields = ['motoristaAcerto', 'caminhaoAcerto', 'freteAcerto', 'comissaoAcerto', 'dataViagemAcerto', 'caminhaoManualAcerto'];
+        fields.forEach(fieldId => {
+            const el = document.getElementById(fieldId);
+            if (el) {
+                el.classList.remove('border-red-500', 'focus:ring-red-500', 'focus:border-red-500');
+            }
+        });
+    }
 
-        if (!motorista || !caminhaoId || frete <= 0 || comissao < 0 || !dataViagem) {
-            console.error('Preencha Motorista, Caminhão, Frete, Comissão e Data de Viagem!');
-            return;
+    /** Salvar transação - CAMPOS TOTALMENTE ABERTOS E LIVRES DE OBRIGATORIEDADE */
+    async function salvarAcerto() {
+        // Fallbacks inteligentes se os dados forem deixados em branco
+        const motorista = document.getElementById('motoristaAcerto').value.trim() || "Cliente Geral";
+        const caminhaoId = document.getElementById('caminhaoAcerto').value || "";
+        const caminhaoManual = document.getElementById('caminhaoManualAcerto').value.trim();
+        const frete = currencyToFloat(document.getElementById('freteAcerto').value); // Compra
+        const comissao = currencyToFloat(document.getElementById('comissaoAcerto').value); // Venda
+        const formaPagamento = document.getElementById('formaPagamentoAcerto').value.trim() || "Não Especificada";
+        const observacoes = document.getElementById('observacoesAcerto').value.trim() || "";
+        
+        let dataViagem = document.getElementById('dataViagemAcerto').value;
+        // Se a data estiver vazia, define automaticamente como o dia de hoje
+        if (!dataViagem) {
+            const hoje = new Date();
+            const yyyy = hoje.getFullYear();
+            const mm = String(hoje.getMonth() + 1).padStart(2, '0');
+            const dd = String(hoje.getDate()).padStart(2, '0');
+            dataViagem = `${yyyy}-${mm}-${dd}`;
         }
 
-        const caminhaoNome = document.getElementById('caminhaoAcerto').options[document.getElementById('caminhaoAcerto').selectedIndex].text;
+        // Define o nome do veículo utilizando o seletor ou a caixa aberta escrita manualmente
+        let caminhaoNome = "Veículo não especificado";
+        if (caminhaoId) {
+            const caminhaoSelect = document.getElementById('caminhaoAcerto');
+            caminhaoNome = caminhaoSelect.options[caminhaoSelect.selectedIndex].text;
+        } else if (caminhaoManual) {
+            caminhaoNome = caminhaoManual;
+        }
+
         const totalDespesas = despesasViagem.reduce((sum, d) => sum + d.valor, 0);
+        const custoTotal = frete + totalDespesas;
+        const sobra = comissao - custoTotal; // Lucro líquido real
 
         const acertoData = {
             motorista,
             caminhaoId,
             caminhaoNome,
-            frete,
-            comissao,
+            frete, // Compra
+            comissao, // Venda
             formaPagamento,
             observacoes,
             dataViagem: firebase.firestore.Timestamp.fromDate(new Date(dataViagem + 'T12:00:00')),
             despesas: despesasViagem,
             totalDespesas,
-            sobra,
+            sobra, // Lucro líquido
             dataRegistro: firebase.firestore.FieldValue.serverTimestamp(),
             status: 'concluido'
         };
 
         try {
             if (acertoEmEdicaoId) {
-                // 1. Edição de Acerto
                 await db.collection("acertos").doc(acertoEmEdicaoId).update(acertoData);
-                await atualizarLancamentoCaixaAcerto(acertoEmEdicaoId, motorista, sobra, dataViagem);
-                console.log('Acerto atualizado e Sobra no Caixa sincronizada com sucesso!');
+                showNotification("Negociação atualizada com sucesso!", "success");
             } else {
-                // 2. Novo Acerto
-                const docRef = await db.collection("acertos").add(acertoData);
-                // 3. Lançamento Automático da Sobra no Caixa
-                if (sobra > 0) {
-                    await lancarSobraNoCaixa(docRef.id, motorista, sobra, dataViagem);
-                }
-                console.log('Acerto salvo e Sobra de Viagem lançada no Caixa!');
+                await db.collection("acertos").add(acertoData);
+                showNotification("Negociação gravada com sucesso!", "success");
             }
             
             limparCamposAcerto();
-            carregarAcertos(); // Atualiza a tabela
-            loadAllCaixaAndFilter(); // Atualiza o caixa
+            carregarAcertos(); 
         } catch (error) {
-            console.error("Erro ao salvar acerto:", error);
-            // alert("Erro ao salvar acerto. Verifique o console."); // Não usar alert
+            console.error("Erro ao salvar transação de compra/venda:", error);
+            showNotification("Erro de conexão ao salvar negociação.", "error");
         }
     }
 
-    /** Lançamento Automático da Sobra no Caixa */
-    async function lancarSobraNoCaixa(acertoId, motorista, sobra, dataViagem) {
-        const lancamentoData = {
-            tipo: 'entrada',
-            valor: sobra,
-            data: firebase.firestore.Timestamp.fromDate(new Date(dataViagem + 'T12:00:00')),
-            // CORREÇÃO 1: Remover o ID do acerto da descrição
-            descricao: `Sobra Viagem - Motorista: ${motorista}`,
-            categoria: 'Sobra Viagem',
-            status: 'recebido', // Sobra de Acerto sempre entra como recebida
-            origemAcertoId: acertoId,
-            dataRegistro: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        await db.collection("caixa").add(lancamentoData);
-    }
-
-    /** Atualiza Lançamento de Caixa após Edição de Acerto */
-    async function atualizarLancamentoCaixaAcerto(acertoId, motorista, novaSobra, novaDataViagem) {
-        const caixaQuery = await db.collection("caixa").where("origemAcertoId", "==", acertoId).get();
-        if (!caixaQuery.empty) {
-            const docRef = caixaQuery.docs[0].ref;
-            // CORREÇÃO 1: Remover o ID do acerto da descrição
-            const novaDescricao = `Sobra Viagem - Motorista: ${motorista}`;
-            await docRef.update({
-                valor: novaSobra,
-                descricao: novaDescricao,
-                data: firebase.firestore.Timestamp.fromDate(new Date(novaDataViagem + 'T12:00:00')),
-                dataAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
-            });
-        }
-    }
-
-    /** Limpa os campos do formulário de Acerto */
     function limparCamposAcerto() {
+        clearValidationStyles();
         document.getElementById('motoristaAcerto').value = '';
         document.getElementById('caminhaoAcerto').value = '';
+        document.getElementById('caminhaoManualAcerto').value = '';
         document.getElementById('freteAcerto').value = '';
         document.getElementById('comissaoAcerto').value = '';
         document.getElementById('formaPagamentoAcerto').value = '';
         document.getElementById('observacoesAcerto').value = '';
         document.getElementById('dataViagemAcerto').value = '';
+        
+        document.getElementById('resumoCompraBase').textContent = floatToCurrency(0);
+        document.getElementById('custoTotalCalculado').textContent = floatToCurrency(0);
         document.getElementById('sobraAcerto').textContent = floatToCurrency(0);
+        
         despesasViagem = [];
         renderizarDespesas();
         acertoEmEdicaoId = null;
-        document.querySelector('#acertos button[onclick="salvarAcerto()"]').textContent = '💾 Salvar Acerto';
+        document.querySelector('#acertos button[onclick="salvarAcerto()"]').textContent = '💾 Salvar Negociação';
     }
 
-    /** Carrega e Exibe Acertos com Filtros */
+    /** Carregar Negociações cadastrados no banco */
     async function carregarAcertos() {
         const tabela = document.getElementById('acertosTable');
         const mobileList = document.getElementById('acertosMobileList');
-        tabela.innerHTML = '<tr><td colspan="7" class="text-center py-4">Carregando acertos...</td></tr>';
-        mobileList.innerHTML = '<div class="text-center py-4">Carregando acertos...</div>';
+        tabela.innerHTML = '<tr><td colspan="8" class="text-center py-4">Carregando dados...</td></tr>';
+        mobileList.innerHTML = '<div class="text-center py-4">Carregando dados...</div>';
 
         const dataInicio = document.getElementById('dataInicioAcerto').value;
         const dataFim = document.getElementById('dataFimAcerto').value;
@@ -1156,25 +1142,24 @@
             query = query.where("dataViagem", ">=", firebase.firestore.Timestamp.fromDate(new Date(dataInicio + 'T00:00:00')));
         }
         if (dataFim) {
-            // Adiciona 1 dia para incluir a data final
-            const endDate = new Date(dataFim + 'T23:59:59'); // Ajuste para incluir o dia inteiro
+            const endDate = new Date(dataFim + 'T23:59:59');
             query = query.where("dataViagem", "<=", firebase.firestore.Timestamp.fromDate(endDate));
         }
 
         try {
             const snapshot = await query.get();
-            let totalFrete = 0, totalComissao = 0, totalDespesas = 0, totalSobra = 0;
-            tabela.innerHTML = ''; // Limpa antes de renderizar
+            let totalCompra = 0, totalVenda = 0, totalDespesas = 0, totalLucro = 0;
+            tabela.innerHTML = ''; 
             mobileList.innerHTML = '';
 
             if (snapshot.empty) {
-                 const emptyMsg = '<tr><td colspan="7" class="text-center py-4">Nenhum acerto encontrado para o período.</td></tr>';
+                 const emptyMsg = '<tr><td colspan="8" class="text-center py-4">Nenhuma negociação encontrada.</td></tr>';
                  tabela.innerHTML = emptyMsg;
-                 mobileList.innerHTML = '<div class="text-center py-4">Nenhum acerto encontrado para o período.</div>';
-                 // Atualiza totais para zero
+                 mobileList.innerHTML = '<div class="text-center py-4">Nenhuma negociação encontrada.</div>';
+                 
                  document.getElementById('totalFreteAcerto').textContent = floatToCurrency(0);
-                 document.getElementById('totalComissaoAcerto').textContent = floatToCurrency(0);
                  document.getElementById('totalDespesasAcerto').textContent = floatToCurrency(0);
+                 document.getElementById('totalComissaoAcerto').textContent = floatToCurrency(0);
                  document.getElementById('totalSobraAcerto').textContent = floatToCurrency(0);
                  return;
             }
@@ -1183,55 +1168,51 @@
                 const acerto = doc.data();
                 acerto.id = doc.id;
                 
-                totalFrete += acerto.frete || 0;
-                totalComissao += acerto.comissao || 0;
+                totalCompra += acerto.frete || 0;
+                totalVenda += acerto.comissao || 0;
                 totalDespesas += acerto.totalDespesas || 0;
-                totalSobra += acerto.sobra || 0;
+                
+                const custoTotal = (acerto.frete || 0) + (acerto.totalDespesas || 0);
+                const lucroLiquido = (acerto.comissao || 0) - custoTotal;
+                totalLucro += lucroLiquido;
 
                 const dataFormatada = acerto.dataViagem ? formatDateBR(acerto.dataViagem.toDate().toISOString().split('T')[0]) : '-';
-                const totalDespesasMonetario = floatToCurrency(acerto.totalDespesas || 0);
 
                 const acoesHtml = `
-                    <button onclick="abrirModalResumoViagem('${acerto.id}')" class="text-gray-600 hover:text-blue-900 mr-2 small-btn" title="Resumo/Despesas">👁️</button>
+                    <button onclick="abrirModalResumoViagem('${acerto.id}')" class="text-gray-600 hover:text-blue-900 mr-2 small-btn" title="Resumo Detalhado">👁️</button>
                     <button onclick="editarAcerto('${acerto.id}')" class="text-blue-600 hover:text-blue-900 mr-2 small-btn" title="Editar">✏️</button>
                     <button onclick="excluirAcerto('${acerto.id}')" class="text-red-600 hover:text-red-900 mr-2 small-btn" title="Excluir">🗑️</button>
-                    <button onclick="abrirModalAssinaturaRecibo('${acerto.id}')" class="text-green-600 hover:text-green-900 small-btn" title="Recibo">📄</button>
+                    <button onclick="abrirModalAssinaturaRecibo('${acerto.id}')" class="text-green-600 hover:text-green-900 small-btn" title="Comprovante">📄</button>
                 `;
                 
-                // ----------------------------------------
-                // 1. Renderização para DESKTOP (Tabela)
-                // ----------------------------------------
                 tabela.innerHTML += `
                     <tr class="hover:bg-gray-100">
-                        <td class="px-6 py-4 whitespace-nowrap">${acerto.motorista}</td>
-                        <td class="px-6 py-4 whitespace-nowrap">${acerto.caminhaoNome || acerto.caminhaoId}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right">${floatToCurrency(acerto.frete || 0)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-red-600">${floatToCurrency(acerto.comissao || 0)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-red-600 relative">
-                            ${totalDespesasMonetario}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-green-700">${floatToCurrency(acerto.sobra || 0)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-800">${acerto.motorista}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-600">${acerto.caminhaoNome || 'Não Selecionado'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-red-600 font-semibold">${floatToCurrency(acerto.frete || 0)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-yellow-600 font-semibold">${floatToCurrency(acerto.totalDespesas || 0)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-orange-600 font-bold bg-orange-50">${floatToCurrency(custoTotal)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-green-700 font-bold">${floatToCurrency(acerto.comissao || 0)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right font-black ${lucroLiquido >= 0 ? 'text-blue-700' : 'text-red-700'}">${floatToCurrency(lucroLiquido)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                             ${acoesHtml}
                         </td>
                     </tr>
                 `;
 
-                // ----------------------------------------
-                // 2. Renderização para MOBILE (Cards)
-                // ----------------------------------------
                 mobileList.innerHTML += `
                     <div class="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
                         <div class="flex justify-between items-start mb-2">
                             <p class="font-bold text-lg text-blue-700">${acerto.motorista}</p>
                             <span class="text-xs text-gray-500">${dataFormatada}</span>
                         </div>
-                        <p class="text-sm text-gray-600 mb-1">Caminhão: ${acerto.caminhaoNome || acerto.caminhaoId}</p>
+                        <p class="text-sm text-gray-600 mb-1">Veículo: ${acerto.caminhaoNome || 'Não Selecionado'}</p>
                         <div class="grid grid-cols-2 gap-2 text-sm">
-                            <p>Frete: <span class="font-semibold text-blue-800">${floatToCurrency(acerto.frete || 0)}</span></p>
-                            <p>Comissão: <span class="font-semibold text-red-600">${floatToCurrency(acerto.comissao || 0)}</span></p>
-                            <p>Despesas: <span class="font-semibold text-red-600">${totalDespesasMonetario}</span></p>
-                            <p>Sobra: <span class="font-bold text-green-700">${floatToCurrency(acerto.sobra || 0)}</span></p>
+                            <p>Compra Base: <span class="font-semibold text-red-600">${floatToCurrency(acerto.frete || 0)}</span></p>
+                            <p>Manutenções: <span class="font-semibold text-yellow-600">${floatToCurrency(acerto.totalDespesas || 0)}</span></p>
+                            <p class="col-span-2">Custo Total: <span class="font-bold text-orange-600">${floatToCurrency(custoTotal)}</span></p>
+                            <p>Venda: <span class="font-bold text-green-700">${floatToCurrency(acerto.comissao || 0)}</span></p>
+                            <p>Lucro: <span class="font-extrabold ${lucroLiquido >= 0 ? 'text-blue-700' : 'text-red-700'}">${floatToCurrency(lucroLiquido)}</span></p>
                         </div>
                         <div class="mt-3 pt-3 border-t flex justify-end">
                             ${acoesHtml}
@@ -1240,26 +1221,23 @@
                 `;
             });
 
-            // Atualiza totais
-            document.getElementById('totalFreteAcerto').textContent = floatToCurrency(totalFrete);
-            document.getElementById('totalComissaoAcerto').textContent = floatToCurrency(totalComissao);
+            // Atualiza os totalizadores globais da aba com a nova somatória
+            document.getElementById('totalFreteAcerto').textContent = floatToCurrency(totalCompra);
             document.getElementById('totalDespesasAcerto').textContent = floatToCurrency(totalDespesas);
-            document.getElementById('totalSobraAcerto').textContent = floatToCurrency(totalSobra);
+            document.getElementById('totalComissaoAcerto').textContent = floatToCurrency(totalVenda);
+            document.getElementById('totalSobraAcerto').textContent = floatToCurrency(totalLucro);
 
         } catch (error) {
-            console.error("Erro ao carregar acertos:", error);
-            const errorMsg = '<tr><td colspan="7" class="text-center py-4 text-red-500">Erro ao carregar dados. Verifique o console.</td></tr>';
-            tabela.innerHTML = errorMsg;
-            mobileList.innerHTML = '<div class="text-center py-4 text-red-500">Erro ao carregar dados. Verifique o console.</div>';
+            console.error("Erro ao carregar negociações:", error);
+            showNotification("Erro ao obter dados do banco de dados.", "error");
         }
     }
 
-    /** Abre o modal de resumo detalhado da viagem (o "Olhinho") */
     async function abrirModalResumoViagem(acertoId) {
         try {
             const doc = await db.collection('acertos').doc(acertoId).get();
             if (!doc.exists) {
-                console.error('Acerto não encontrado!');
+                showNotification('Negociação não encontrada!', 'error');
                 return;
             }
             acertoAtualData = doc.data();
@@ -1273,6 +1251,8 @@
             }
 
             const dataViagemNormalizada = toDate(acertoAtualData.dataViagem);
+            const custoTotal = (acertoAtualData.frete || 0) + (acertoAtualData.totalDespesas || 0);
+            const lucroReal = (acertoAtualData.comissao || 0) - custoTotal;
             
             document.getElementById('resumoData').textContent = dataViagemNormalizada ? formatDateBR(dataViagemNormalizada.toISOString().split('T')[0]) : '-';
             document.getElementById('resumoMotorista').textContent = acertoAtualData.motorista;
@@ -1281,149 +1261,123 @@
             document.getElementById('resumoComissao').textContent = floatToCurrency(acertoAtualData.comissao || 0);
             document.getElementById('resumoFormaPagamento').textContent = acertoAtualData.formaPagamento || 'N/A';
             document.getElementById('resumoTotalDespesas').textContent = floatToCurrency(acertoAtualData.totalDespesas || 0);
-            document.getElementById('resumoSobra').textContent = floatToCurrency(acertoAtualData.sobra || 0);
+            document.getElementById('resumoCustoTotal').textContent = floatToCurrency(custoTotal);
+            document.getElementById('resumoSobra').textContent = floatToCurrency(lucroReal);
             document.getElementById('resumoObservacoes').textContent = acertoAtualData.observacoes || 'N/A';
 
-            // Lista de Despesas
             const listaDespesas = document.getElementById('resumoListaDespesas');
             listaDespesas.innerHTML = '';
             (acertoAtualData.despesas || []).forEach(d => {
                 listaDespesas.innerHTML += `<li>- ${d.descricao}: ${floatToCurrency(d.valor)}</li>`;
             });
             if (listaDespesas.innerHTML === '') {
-                listaDespesas.innerHTML = '<li>Nenhuma despesa registrada.</li>';
+                listaDespesas.innerHTML = '<li>Nenhuma despesa adicionada.</li>';
             }
 
             document.getElementById('modalResumoViagem').classList.remove('hidden');
             document.getElementById('modalResumoViagem').style.display = "flex";
         } catch (error) {
-            console.error('Erro ao buscar acerto para resumo:', error);
-            // alert('Erro ao carregar dados para resumo.'); // Não usar alert
+            console.error('Erro ao buscar resumo detalhado:', error);
         }
     }
-
 
     function filtrarAcertos() {
         carregarAcertos(); 
     }
 
-    /** Editar Acerto */
     async function editarAcerto(acertoId) {
         acertoEmEdicaoId = acertoId;
-        document.querySelector('#acertos button[onclick="salvarAcerto()"]').textContent = '🔄 Atualizar Acerto';
+        document.querySelector('#acertos button[onclick="salvarAcerto()"]').textContent = '🔄 Atualizar Negociação';
         
         try {
             const doc = await db.collection('acertos').doc(acertoId).get();
             if (!doc.exists) {
-                console.error('Acerto não encontrado!');
+                showNotification('Registro de negociação não encontrado!', 'error');
                 return;
             }
             const acerto = doc.data();
             const dataViagemNormalizada = toDate(acerto.dataViagem);
 
-            document.getElementById('motoristaAcerto').value = acerto.motorista;
-            document.getElementById('caminhaoAcerto').value = acerto.caminhaoId;
+            document.getElementById('motoristaAcerto').value = acerto.motorista === "Cliente Geral" ? "" : acerto.motorista;
+            document.getElementById('caminhaoAcerto').value = acerto.caminhaoId || "";
+            document.getElementById('caminhaoManualAcerto').value = acerto.caminhaoId ? "" : (acerto.caminhaoNome !== "Veículo não especificado" ? acerto.caminhaoNome : "");
             document.getElementById('freteAcerto').value = floatToCurrency(acerto.frete || 0);
             document.getElementById('comissaoAcerto').value = floatToCurrency(acerto.comissao || 0);
-            document.getElementById('formaPagamentoAcerto').value = acerto.formaPagamento || '';
+            document.getElementById('formaPagamentoAcerto').value = acerto.formaPagamento === "Não Especificada" ? "" : acerto.formaPagamento;
             document.getElementById('observacoesAcerto').value = acerto.observacoes || '';
             document.getElementById('dataViagemAcerto').value = dataViagemNormalizada ? dataViagemNormalizada.toISOString().split('T')[0] : '';
             
-            // Carrega despesas para edição
             despesasViagem = acerto.despesas || [];
             renderizarDespesas();
             calcularSobra();
 
-            window.scrollTo({ top: 0, behavior: 'smooth' }); // Volta para o topo do formulário
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (error) {
-            console.error('Erro ao buscar acerto para edição:', error);
-            // alert('Erro ao carregar dados para edição.'); // Não usar alert
+            console.error('Erro ao buscar dados para edição:', error);
         }
     }
 
-    /** Excluir Acerto */
     async function excluirAcerto(acertoId) {
-        if (!confirm('Tem certeza que deseja excluir este acerto e o lançamento de sobra no caixa?')) return;
+        if (!confirm('Tem certeza que deseja excluir esta negociação?')) return;
         
         try {
-            // Exclui o lançamento de caixa relacionado (se existir)
-            const caixaQuery = await db.collection("caixa").where("origemAcertoId", "==", acertoId).get();
-            const batch = db.batch();
-            caixaQuery.forEach(doc => {
-                batch.delete(doc.ref);
-            });
-            await batch.commit();
-
-            // Exclui o acerto
             await db.collection("acertos").doc(acertoId).delete();
-            console.log('Acerto e lançamento de caixa excluídos com sucesso!');
+            showNotification('Negociação excluída com sucesso!', 'success');
             carregarAcertos();
-            loadAllCaixaAndFilter();
         } catch (error) {
-            console.error("Erro ao excluir acerto:", error);
-            // alert("Erro ao excluir acerto. Verifique o console."); // Não usar alert
+            console.error("Erro ao excluir transação:", error);
+            showNotification("Erro ao tentar remover transação do banco.", "error");
         }
     }
 
-    /** Abre Modal de Assinatura para Recibo */
     async function abrirModalAssinaturaRecibo(acertoId) {
         try {
             const doc = await db.collection('acertos').doc(acertoId).get();
             if (!doc.exists) {
-                console.error('Acerto não encontrado!');
+                showNotification('Transação inválida ou excluída!', 'error');
                 return;
             }
-            acertoAtualData = doc.data(); // Guarda os dados para usar no PDF
+            acertoAtualData = doc.data();
             acertoAtualData.id = acertoId;
             
-            // Limpa canvas ao abrir
             limparAssinatura('Motorista', true);
             limparAssinatura('Proprietario', true);
 
             document.getElementById('modalAssinaturaRecibo').classList.remove('hidden');
             document.getElementById('modalAssinaturaRecibo').style.display = "flex";
             
-            // Re-inicializa canvas para garantir que funcionem (necessário para redimensionamento em mobile)
             initCanvas('Motorista');
             initCanvas('Proprietario');
-
         } catch (error) {
             console.error('Erro ao abrir modal de assinatura:', error);
-            // alert('Erro ao carregar dados para assinatura.'); // Não usar alert
         }
     }
 
-    /** Inicializa Canvas de Assinatura (CORRIGIDO PARA DPR E RESPONSIVIDADE) */
     function initCanvas(id) {
         const canvas = document.getElementById(`canvas${id}`);
         if (!canvas) return; 
 
         const ctx = canvas.getContext('2d');
-        const dpr = window.devicePixelRatio || 1; // Obtém o Device Pixel Ratio
+        const dpr = window.devicePixelRatio || 1;
         
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
 
-        // Obtém o tamanho VISÍVEL do canvas (pelo CSS/Layout)
         const rect = canvas.getBoundingClientRect();
         const displayWidth = rect.width;
         const displayHeight = rect.height; 
 
-        // Define a resolução INTERNA do canvas multiplicada pelo DPR
         canvas.width = displayWidth * dpr;
         canvas.height = displayHeight * dpr; 
         
-        // Define o tamanho VISÍVEL (CSS) novamente (boa prática)
         canvas.style.width = `${displayWidth}px`;
         canvas.style.height = `${displayHeight}px`;
 
-        // Normaliza todas as operações de desenho para o DPR (escala o contexto)
         ctx.scale(dpr, dpr);
 
-        // Limpa o canvas e configura o pincel
         ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, displayWidth, displayHeight); // Usa o tamanho visual para a limpeza
+        ctx.fillRect(0, 0, displayWidth, displayHeight);
         ctx.strokeStyle = '#000'; 
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
@@ -1441,7 +1395,6 @@
                 clientY = e.clientY;
             }
 
-            // NOVO CÁLCULO: Usa o rect do display e o dpr já foi aplicado no ctx.scale
             const currentX = clientX - rect.left;
             const currentY = clientY - rect.top;
             
@@ -1452,7 +1405,6 @@
             
             lastX = currentX;
             lastY = currentY;
-            
             e.preventDefault();
         }
 
@@ -1467,16 +1419,13 @@
                 clientY = e.clientY;
             }
             
-            // Define o ponto inicial usando as coordenadas relativas ao canvas visual
             lastX = clientX - rect.left;
             lastY = clientY - rect.top;
             
-            // Desenha um ponto para toques rápidos
             ctx.beginPath();
             ctx.arc(lastX, lastY, ctx.lineWidth / 2, 0, 2 * Math.PI);
             ctx.fillStyle = ctx.strokeStyle;
             ctx.fill();
-            
             e.preventDefault();
         }
 
@@ -1484,14 +1433,12 @@
             isDrawing = false;
         }
 
-        // Remove listeners antigos para evitar duplicação (boas práticas)
         ['mousedown', 'mousemove', 'mouseup', 'mouseout', 'touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(event => {
             canvas.removeEventListener(event, startDrawing);
             canvas.removeEventListener(event, draw);
             canvas.removeEventListener(event, stopDrawing);
         });
         
-        // Adiciona eventos (Mouse e Touch)
         canvas.addEventListener('mousedown', startDrawing);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseup', stopDrawing);
@@ -1502,46 +1449,33 @@
         canvas.addEventListener('touchend', stopDrawing);
         canvas.addEventListener('touchcancel', stopDrawing);
 
-        // Atualiza a variável global do canvas para referência
         if (id === 'Motorista') window.canvasMotorista = canvas;
         else if (id === 'Proprietario') window.canvasProprietario = canvas;
     }
 
-    /** Limpa o Canvas de Assinatura */
     function limparAssinatura(type, skipAlert = false) {
         const canvas = document.getElementById(`canvas${type}`);
         if (!canvas) return;
 
         const ctx = canvas.getContext('2d');
-        // Limpa o canvas (preenche com branco para garantir)
         ctx.fillStyle = '#fff';
-        // Ajuste de Limpeza para a escala do DPR
         const rect = canvas.getBoundingClientRect();
-        const displayWidth = rect.width;
-        const displayHeight = rect.height;
-        ctx.fillRect(0, 0, displayWidth, displayHeight); 
-        
-        if (!skipAlert) console.log(`Assinatura do ${type} limpa!`);
+        ctx.fillRect(0, 0, rect.width, rect.height); 
     }
 
-    /** Salva assinaturas e prepara a abertura do Recibo */
     function salvarAssinaturasEGerarRecibo() {
         const assMotorista = document.getElementById('canvasMotorista').toDataURL('image/png');
         const assProprietario = document.getElementById('canvasProprietario').toDataURL('image/png');
         
-        // Armazena as assinaturas no objeto de dados atual
         acertoAtualData.assinaturaMotorista = assMotorista;
         acertoAtualData.assinaturaProprietario = assProprietario;
 
-        // Fecha o modal de assinatura e abre o modal de recibo
         fecharModalAssinaturaRecibo();
         abrirModalRecibo(acertoAtualData);
     }
     
-    /** Abre o Modal do Recibo com Assinaturas */
     async function abrirModalRecibo(acerto) {
         try {
-            // Tenta buscar a placa pelo ID do caminhão
             let placa = 'N/A';
             if (acerto.caminhaoId) {
                 const caminhaoDoc = await db.collection('caminhoes').doc(acerto.caminhaoId).get();
@@ -1552,116 +1486,102 @@
 
             const dataViagemNormalizada = toDate(acerto.dataViagem);
 
-
-            document.getElementById('reciboEmpresa').textContent = localStorage.getItem("nomeEmpresa") || 'Nome da Empresa';
+            document.getElementById('reciboEmpresa').textContent = localStorage.getItem("nomeEmpresa") || 'Estabelecimento de Veículos';
             document.getElementById('reciboMotorista').textContent = acerto.motorista;
             document.getElementById('reciboCaminhao').textContent = `${acerto.caminhaoNome || 'N/A'} (${placa})`;
             document.getElementById('reciboData').textContent = dataViagemNormalizada ? formatDateBR(dataViagemNormalizada.toISOString().split('T')[0]) : '-';
-            document.getElementById('reciboComissao').textContent = floatToCurrency(acerto.comissao || 0);
+            document.getElementById('reciboComissao').textContent = floatToCurrency(acerto.comissao || 0); // Venda
             document.getElementById('reciboObservacoes').textContent = acerto.observacoes || 'N/A';
             document.getElementById('reciboDataGeracao').textContent = new Date().toLocaleString('pt-BR');
 
-            // Injeta as imagens de assinatura
             document.getElementById('reciboAssMotorista').src = acerto.assinaturaMotorista || '';
             document.getElementById('reciboAssProprietario').src = acerto.assinaturaProprietario || '';
 
             document.getElementById('modalRecibo').classList.remove('hidden');
             document.getElementById('modalRecibo').style.display = "flex";
-            window.acertoParaRecibo = acerto; // Armazena globalmente para PDF
+            window.acertoParaRecibo = acerto;
         } catch (error) {
             console.error('Erro ao gerar recibo:', error);
-            // alert('Erro ao carregar dados para o recibo.'); // Não usar alert
         }
     }
 
-
-    /** Gerar PDF do Recibo (usando html2canvas) - CORRIGIDO PARA QUEBRA DE PÁGINA */
     function gerarReciboPDF() {
         if (typeof html2canvas === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
-            console.error('Bibliotecas de PDF não carregadas. Recurso indisponível.');
+            showNotification('Biblioteca PDF não carregada. Tente novamente.', 'error');
             return;
         }
         
         const element = document.getElementById('reciboParaPDF');
-        const filename = `Recibo_${window.acertoParaRecibo.motorista}.pdf`;
+        const filename = `Comprovante_Negociacao_${window.acertoParaRecibo.motorista}.pdf`;
 
-        // Aumentar a escala para melhor qualidade em telas de alta resolução
         html2canvas(element, { scale: 3 }).then(canvas => { 
             const imgData = canvas.toDataURL('image/png');
-            // Formato A4: 210mm x 297mm (retrato)
             const pdf = new jspdf.jsPDF('p', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
             
-            // Largura da imagem no PDF: 190mm (20mm de margem total)
             const imgWidth = 190; 
             const imgHeight = canvas.height * imgWidth / canvas.width;
             
             let heightLeft = imgHeight;
-            let position = 10; // Margem superior inicial (10mm)
+            let position = 10;
             
-            // Adiciona a primeira página
             pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
-            heightLeft -= (pdfHeight - position); // Subtrai o espaço já ocupado na primeira página
+            heightLeft -= (pdfHeight - position);
 
-            // Adiciona páginas extras se o conteúdo for maior que uma página
             while (heightLeft > 0) {
-                position = 10; // Nova margem superior para a próxima página
+                position = 10;
                 pdf.addPage();
-                
-                // O Y negativo na imagem é o quanto ela subiu (rolou)
-                // O 10 é a margem superior
                 pdf.addImage(imgData, 'PNG', 10, - (imgHeight - heightLeft), imgWidth, imgHeight); 
                 heightLeft -= (pdfHeight - position);
             }
 
             pdf.save(filename);
+            showNotification("Comprovante PDF gerado com sucesso!", "success");
         }).catch(error => {
             console.error('Erro ao gerar PDF do Recibo:', error);
-            // alert('Erro ao gerar PDF do recibo. Verifique o console.'); // Não usar alert
+            showNotification("Erro na criação do PDF.", "error");
         });
     }
 
-    /** Gerar Relatório de Acertos (PDF) */
     function gerarRelatorioAcertoPDF() {
         if (typeof html2canvas === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
-            console.error('Bibliotecas de PDF não carregadas. Recurso indisponível.');
+            showNotification('Componentes PDF não carregados completamente.', 'error');
             return;
         }
 
-        // Título e Tabela (Desktop)
         const titulo = document.createElement('h2');
-        titulo.textContent = 'Relatório de Acertos de Viagem';
+        titulo.textContent = 'Relatório de Compra e Venda de Carros';
         titulo.style.textAlign = 'center';
+        titulo.style.fontSize = '18px';
+        titulo.style.fontWeight = 'bold';
+        titulo.style.marginBottom = '15px';
 
         const dataRange = `Período: ${document.getElementById('dataInicioAcerto').value || 'Início'} a ${document.getElementById('dataFimAcerto').value || 'Fim'}`;
-        const totalFrete = document.getElementById('totalFreteAcerto').textContent;
-        const totalComissao = document.getElementById('totalComissaoAcerto').textContent;
-        const totalSobra = document.getElementById('totalSobraAcerto').textContent;
+        const totalCompra = document.getElementById('totalFreteAcerto').textContent;
+        const totalDespesas = document.getElementById('totalDespesasAcerto').textContent;
+        const totalVenda = document.getElementById('totalComissaoAcerto').textContent;
+        const totalLucro = document.getElementById('totalSobraAcerto').textContent;
         
         const totaisDiv = document.createElement('div');
         totaisDiv.innerHTML = `
             <p><strong>${dataRange}</strong></p>
-            <p>Total Frete: ${totalFrete} | Total Comissão: ${totalComissao} | **Total Sobra: ${totalSobra}**</p>
+            <p style="margin-top: 5px;">Total Pago em Compras: ${totalCompra} | Total em Despesas: ${totalDespesas} | Total Recebido em Vendas: ${totalVenda} | **Lucro Líquido Realizado: ${totalLucro}**</p>
         `;
-        totaisDiv.style.marginBottom = '10px';
+        totaisDiv.style.marginBottom = '15px';
         totaisDiv.style.fontSize = '12px';
 
         const tabelaOriginal = document.getElementById('acertosTable').closest('table');
-        
-        // Clona a tabela e remove as colunas de Ações para o PDF
         const tabelaClone = tabelaOriginal.cloneNode(true);
-        // Remove a última coluna (Ações)
         tabelaClone.querySelectorAll('tr').forEach(row => {
             if (row.cells.length > 0) {
                  row.deleteCell(row.cells.length - 1);
             }
         });
-        tabelaClone.querySelector('thead tr th:last-child').remove(); // Remove o cabeçalho Ações
+        tabelaClone.querySelector('thead tr th:last-child').remove();
 
-        // Cria um container temporário para renderizar o PDF
         const tempContainer = document.createElement('div');
-        tempContainer.style.width = '1050px'; // Define uma largura fixa para o PDF (para simular desktop)
+        tempContainer.style.width = '1050px';
         tempContainer.style.padding = '20px';
         tempContainer.append(titulo, totaisDiv, tabelaClone);
         
@@ -1669,15 +1589,15 @@
         
         html2canvas(tempContainer, { 
             scale: 2,
-            windowWidth: 1200, // Força a largura de renderização
+            windowWidth: 1200,
             scrollY: -window.scrollY 
         }).then(canvas => {
             const imgData = canvas.toDataURL('image/png');
-            const pdf = new jspdf.jsPDF('l', 'mm', 'a4'); // 'l' para landscape (paisagem)
+            const pdf = new jspdf.jsPDF('l', 'mm', 'a4');
             
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = 280; // Largura do conteúdo (A4 paisagem)
+            const imgWidth = 280;
             const imgHeight = canvas.height * imgWidth / canvas.width;
             let heightLeft = imgHeight;
             let position = 10;
@@ -1685,7 +1605,6 @@
             pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight);
             heightLeft -= pdfHeight;
             
-            // Adiciona páginas para tabelas muito longas (se necessário)
             while (heightLeft >= 0) {
                 position = heightLeft - imgHeight;
                 pdf.addPage();
@@ -1693,27 +1612,27 @@
                 heightLeft -= pdfHeight;
             }
 
-            pdf.save(`Relatorio_Acertos_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
-            
-            // Remove o container temporário
+            pdf.save(`Relatorio_Negociacoes_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
             tempContainer.remove();
+            showNotification("Relatório de negociações exportado!", "success");
         }).catch(error => {
             console.error('Erro ao gerar PDF do Relatório:', error);
             tempContainer.remove();
         });
     }
 
-    /** Gerar Relatório de Caixa (PDF) */
     function gerarRelatorioCaixaPDF() {
         if (typeof html2canvas === 'undefined' || typeof jspdf.jsPDF === 'undefined') {
-            console.error('Bibliotecas de PDF não carregadas. Recurso indisponível.');
+            showNotification('Ocorreu um problema ao acionar o criador de PDF.', 'error');
             return;
         }
 
-        // Título e Tabela (Desktop)
         const titulo = document.createElement('h2');
-        titulo.textContent = 'Relatório de Movimentação de Caixa';
+        titulo.textContent = 'Relatório de Fluxo de Caixa';
         titulo.style.textAlign = 'center';
+        titulo.style.fontSize = '18px';
+        titulo.style.fontWeight = 'bold';
+        titulo.style.marginBottom = '15px';
 
         const totalEntradas = document.getElementById('totalEntradasCaixa').textContent;
         const totalSaidas = document.getElementById('totalSaidasCaixa').textContent;
@@ -1721,26 +1640,22 @@
         
         const totaisDiv = document.createElement('div');
         totaisDiv.innerHTML = `
-            <p>Total Entradas: ${totalEntradas} | Total Saídas: ${totalSaidas} | **Saldo: ${saldoAtual}**</p>
+            <p>Total Entradas: ${totalEntradas} | Total Saídas: ${totalSaidas} | **Saldo Líquido: ${saldoAtual}**</p>
         `;
-        totaisDiv.style.marginBottom = '10px';
+        totaisDiv.style.marginBottom = '15px';
         totaisDiv.style.fontSize = '12px';
         
         const tabelaOriginal = document.getElementById('caixaTable').closest('table');
-        
-        // Clona a tabela e remove as colunas de Ações para o PDF
         const tabelaClone = tabelaOriginal.cloneNode(true);
-        // Remove a última coluna (Ações)
         tabelaClone.querySelectorAll('tr').forEach(row => {
             if (row.cells.length > 0) {
                  row.deleteCell(row.cells.length - 1);
             }
         });
-        tabelaClone.querySelector('thead tr th:last-child').remove(); // Remove o cabeçalho Ações
+        tabelaClone.querySelector('thead tr th:last-child').remove();
 
-        // Cria um container temporário para renderizar o PDF
         const tempContainer = document.createElement('div');
-        tempContainer.style.width = '1050px'; // Define uma largura fixa para o PDF (para simular desktop)
+        tempContainer.style.width = '1050px';
         tempContainer.style.padding = '20px';
         tempContainer.append(titulo, totaisDiv, tabelaClone);
         
@@ -1748,15 +1663,15 @@
         
         html2canvas(tempContainer, { 
             scale: 2,
-            windowWidth: 1200, // Força a largura de renderização
+            windowWidth: 1200,
             scrollY: -window.scrollY 
         }).then(canvas => {
             const imgData = canvas.toDataURL('image/png');
-            const pdf = new jspdf.jsPDF('l', 'mm', 'a4'); // 'l' para landscape (paisagem)
+            const pdf = new jspdf.jsPDF('l', 'mm', 'a4');
             
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = 280; // Largura do conteúdo (A4 paisagem)
+            const imgWidth = 280;
             const imgHeight = canvas.height * imgWidth / canvas.width;
             let heightLeft = imgHeight;
             let position = 10;
@@ -1764,7 +1679,6 @@
             pdf.addImage(imgData, 'PNG', 8, position, imgWidth, imgHeight);
             heightLeft -= pdfHeight;
             
-            // Adiciona páginas para tabelas muito longas (se necessário)
             while (heightLeft >= 0) {
                 position = heightLeft - imgHeight;
                 pdf.addPage();
@@ -1773,29 +1687,28 @@
             }
 
             pdf.save(`Relatorio_Caixa_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
-            
-            // Remove o container temporário
             tempContainer.remove();
+            showNotification("Fluxo de Caixa exportado em PDF!", "success");
         }).catch(error => {
-            console.error('Erro ao gerar PDF do Relatório:', error);
+            console.error('Erro ao gerar PDF do Caixa:', error);
             tempContainer.remove();
         });
     }
 
-    /** Chama o Gemini para sugerir uma categoria baseada na descrição */
+    /** Sugestão inteligente de categoria com o Gemini */
     async function sugerirCategoria() {
         const descricao = document.getElementById('descricaoCaixa').value.trim();
         const categoriaInput = document.getElementById('categoriaCaixa');
 
         if (!descricao) {
-            console.error("Por favor, preencha a Descrição para obter uma sugestão.");
+            showNotification("Descreva a transação primeiro para que a IA possa sugerir a categoria.", "error");
             return;
         }
 
-        categoriaInput.value = "Aguarde, analisando...";
+        categoriaInput.value = "Analisando...";
         
-        const systemPrompt = "Você é um especialista em contabilidade de frotas. Dada a descrição de uma transação, retorne APENAS a categoria financeira mais apropriada (máximo 3 palavras). Exemplos: 'Combustível', 'Pedágio', 'Manutenção', 'Salário', 'Aluguel', 'Frete', 'Outros'.";
-        const userQuery = `Qual categoria para: "${descricao}"?`;
+        const systemPrompt = "Você é um contador especializado em lojas de veículos. Com base na descrição, indique APENAS a categoria financeira ideal (máximo 3 palavras). Exemplos: 'Manutenção / Oficina', 'Documentação / Despachante', 'Compra de Veículo', 'Venda de Veículo', 'Acessórios / Estética', 'Comissões', 'Outros'.";
+        const userQuery = `Diga a categoria financeira exata para: "${descricao}"`;
         
         const payload = {
             contents: [{ parts: [{ text: userQuery }] }],
@@ -1809,17 +1722,15 @@
                 body: JSON.stringify(payload)
             });
             const result = await response.json();
-            const text = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "Não foi possível sugerir.";
+            const text = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "Outros";
             
-            categoriaInput.value = text.replace(/["'.]/g, ''); // Limpa aspas e pontos
+            categoriaInput.value = text.replace(/["'.]/g, '');
         } catch (error) {
-            console.error("Erro ao chamar a API Gemini:", error);
-            categoriaInput.value = "Erro na API.";
+            console.error("Erro na API Gemini:", error);
+            categoriaInput.value = "Outros";
         }
     }
 
-
-    /** Exibe/Oculta campos de vencimento/cheque no modal de NOVO lançamento */
     function toggleVencimentoCheque() {
         const tipo = document.getElementById('tipoCaixa').value;
         const isSaida = tipo === 'saida';
@@ -1845,10 +1756,9 @@
         document.getElementById('labelVencimento').textContent = isCheque ? 'Apresentação da 1ª Parcela' : 'Vencimento da 1ª Parcela';
     }
 
-    /** Calcula e exibe a tabela de desdobramento de parcelas */
     function desdobrarParcelas(qtd, dataInicioStr, tipo, valorTotal) {
         const valorParcela = valorTotal / qtd;
-        const dataInicio = new Date(dataInicioStr + 'T12:00:00'); // Evita problemas de timezone
+        const dataInicio = new Date(dataInicioStr + 'T12:00:00');
 
         let html = '';
         for (let i = 0; i < qtd; i++) {
@@ -1870,29 +1780,25 @@
         document.getElementById('tabelaParcelas').innerHTML = html;
     }
 
-    /** Salva Lançamento Manual (Incluindo Parcelas) */
     async function salvarLancamentoCaixa() {
         const tipo = document.getElementById('tipoCaixa').value;
         const valorTotal = currencyToFloat(document.getElementById('valorCaixa').value);
-        const data = document.getElementById('dataCaixa').value; // String YYYY-MM-DD
+        const data = document.getElementById('dataCaixa').value; 
         const categoria = document.getElementById('categoriaCaixa').value.trim();
         const descricao = document.getElementById('descricaoCaixa').value.trim();
 
         if (valorTotal <= 0 || !data) {
-            console.error('Preencha o Tipo, Valor e Data de Lançamento!');
+            showNotification('O valor de lançamento e a data são obrigatórios!', 'error');
             return;
         }
 
         const isBoleto = document.getElementById('isBoleto').checked;
         const isCheque = document.getElementById('isCheque').checked;
         const qtdParcelas = parseInt(document.getElementById('qtdParcelas').value) || 1;
-
-        // Converte a data de lançamento para Timestamp (centralizado)
         const dataLancamentoTimestamp = firebase.firestore.Timestamp.fromDate(new Date(data + 'T12:00:00'));
 
         try {
             if (tipo === 'saida' && (isBoleto || isCheque)) {
-                // Lançamento Parcelado
                 const valorParcela = valorTotal / qtdParcelas;
                 const lancamentos = [];
                 const tipoParcela = isBoleto ? 'vencimento' : 'apresentacao';
@@ -1901,18 +1807,17 @@
                     const dataParcelaStr = document.getElementById(`${tipoParcela}Parcela${i}`)?.value;
                     
                     if (!dataParcelaStr) {
-                         // Erro crítico: data de vencimento/apresentação não encontrada para a parcela
-                         console.error(`Erro: Data da parcela ${i + 1} não preenchida ou não encontrada.`);
+                         showNotification(`Sinalize a data da parcela ${i + 1}`, 'error');
                          return;
                     }
 
                     lancamentos.push({
                         tipo,
                         valor: valorParcela,
-                        data: dataLancamentoTimestamp, // Data de Lançamento
-                        dataVencimento: firebase.firestore.Timestamp.fromDate(new Date(dataParcelaStr + 'T12:00:00')), // Data de Vencimento/Apresentação
+                        data: dataLancamentoTimestamp,
+                        dataVencimento: firebase.firestore.Timestamp.fromDate(new Date(dataParcelaStr + 'T12:00:00')),
                         categoria: categoria || 'Despesa Parcelada',
-                        descricao: `${descricao || 'Despesa Parcelada'} (${i + 1}/${qtdParcelas})`,
+                        descricao: `${descricao || 'Despesa'} (${i + 1}/${qtdParcelas})`,
                         status: 'a pagar',
                         parcela: `${i + 1}/${qtdParcelas}`,
                         tipoDocumento: isBoleto ? 'Boleto' : 'Cheque',
@@ -1925,33 +1830,30 @@
                     batch.set(db.collection("caixa").doc(), lancamento);
                 });
                 await batch.commit();
-                console.log('Lançamentos parcelados criados com sucesso!');
 
             } else {
-                // Lançamento Simples (Entrada ou Saída à vista)
                 const lancamento = {
                     tipo,
                     valor: valorTotal,
                     data: dataLancamentoTimestamp,
-                    categoria: categoria || (tipo === 'entrada' ? 'Receita Diversa' : 'Despesa à Vista'),
+                    categoria: categoria || (tipo === 'entrada' ? 'Entrada Diversa' : 'Saída à Vista'),
                     descricao: descricao || (tipo === 'entrada' ? 'Entrada Manual' : 'Saída Manual'),
-                    dataVencimento: tipo === 'saida' ? dataLancamentoTimestamp : null, // Saída à vista = Vencimento é igual à Data de Lançamento
-                    status: tipo === 'entrada' ? 'recebido' : 'pago', // Se é à vista, assume que já está pago/recebido
+                    dataVencimento: tipo === 'saida' ? dataLancamentoTimestamp : null,
+                    status: tipo === 'entrada' ? 'recebido' : 'pago',
                     dataRegistro: firebase.firestore.FieldValue.serverTimestamp()
                 };
                 await db.collection("caixa").add(lancamento);
-                console.log(`Lançamento de ${tipo} simples salvo com sucesso!`);
             }
 
+            showNotification('Lançamento inserido no caixa!', 'success');
             limparCamposCaixa();
             loadAllCaixaAndFilter();
-
         } catch (error) {
             console.error("Erro ao salvar lançamento manual:", error);
+            showNotification('Falha ao tentar inserir lançamento.', 'error');
         }
     }
 
-    /** Limpa campos do Caixa */
     function limparCamposCaixa() {
         document.getElementById('tipoCaixa').value = 'entrada';
         document.getElementById('valorCaixa').value = '';
@@ -1966,11 +1868,8 @@
         toggleVencimentoCheque();
     }
     
-    /** Função principal de filtro e totais */
     function filtrarCaixaEAtualizarTotais(items) {
-      // items pode vir vazio -> tenta pegar window.caixaItems
       items = items || window.caixaItems || [];
-      // elementos (IDs padrão; ajusta caso seu HTML use outros)
       const fLancEl = document.getElementById('filtroTipoRecebimento');
       const fVencEl = document.getElementById('filtroTipoVencimento');
       const fMesEl = document.getElementById('filtroMes');
@@ -1984,25 +1883,15 @@
       let lancStart = null;
       let lancEnd   = null;
       
-      // 1. Definição do Período (lancStart / lancEnd)
-      
-      // Prioriza filtro por mês
       if (fMesEl && fMesEl.value) {
           const [year, month] = fMesEl.value.split('-');
-          lancStart = new Date(year, month - 1, 1, 0, 0, 0); // startOfDay
-          lancEnd   = new Date(year, month, 0, 23, 59, 59, 999); // endOfDay
+          lancStart = new Date(year, month - 1, 1, 0, 0, 0); 
+          lancEnd   = new Date(year, month, 0, 23, 59, 59, 999);
       }
-      // Sobrescreve com filtro de data manual se fornecido (apenas se o input não estiver vazio)
       if (lancStartVal) lancStart = startOfDay(parseLocalDateFromInput(lancStartVal));
       if (lancEndVal) lancEnd = endOfDay(parseLocalDateFromInput(lancEndVal));
 
-      const vencStart = lancStart; // Usamos o mesmo range para vencimento (no modo Realizado)
-      const vencEnd   = lancEnd;
-
-      // Se nenhum filtro de data foi preenchido, tratamos como "sem filtro de data"
       const temFiltroData = lancStart || lancEnd;
-
-      // tabela alvo e tot elements
       const tbody = document.getElementById('caixaTable') || null;
       if (tbody) tbody.innerHTML = '';
 
@@ -2011,7 +1900,6 @@
       const mostrados = [];
 
       items.forEach(raw => {
-        // normaliza campos
         const tipoRaw = (raw.tipo || raw.type || '').toString().toLowerCase();
         const tipo = (tipoRaw === 'entrada' || tipoRaw === 'recebimento') ? 'entrada' :
                      (tipoRaw === 'saida' || tipoRaw === 'saída' || tipoRaw === 'despesa') ? 'saida' :
@@ -2023,61 +1911,46 @@
         const forma = (raw.forma || raw.form || '') + '';
         const descricao = (raw.descricao || raw.description || raw.obs || raw.note || '') + '';
 
-        // decide incluir
         let incluir = false;
         
-        // Regra de Filtro
         if (!temFiltroData && !fLanc && !fVenc) {
-            // Regra 1: Sem filtro de data e sem checkbox => inclui tudo
             incluir = true;
         } else {
-            // Se houver filtro de data E/OU checkbox:
-            
-            // Entradas (Filtradas por Lançamento)
             if (tipo === 'entrada') {
-                if (fLanc) { // Se Recebimento marcado
+                if (fLanc) {
                     incluir = inRange(dataLanc, lancStart, lancEnd);
                 } else if (!fVenc && !fLanc && temFiltroData) {
-                    // Filtro de data simples ativo (sem checkbox)
                     incluir = inRange(dataLanc, lancStart, lancEnd);
                 }
             } 
-            // Saídas (Filtradas por Vencimento se fVenc, ou Lançamento se fLanc)
             else if (tipo === 'saida') {
-                // Filtro por Vencimento (Foco: Pagamentos a fazer no período)
                 if (fVenc) {
-                    incluir = inRange(dataVenc, vencStart, vencEnd);
+                    incluir = inRange(dataVenc, lancStart, lancEnd);
                 } 
-                // Filtro por Lançamento (Foco: Despesas registradas no período)
                 else if (fLanc) {
                     incluir = inRange(dataLanc, lancStart, lancEnd);
                 }
-                // Filtro de Data Simples (Data customizada ativa, mas sem checkbox)
                 else if (!fLanc && !fVenc && temFiltroData) {
-                    // Assume que se a data está ativa, queremos ver Saídas por vencimento OU lançamento no range
-                    incluir = inRange(dataLanc, lancStart, lancEnd) || inRange(dataVenc, vencStart, vencEnd);
+                    incluir = inRange(dataLanc, lancStart, lancEnd) || inRange(dataVenc, lancStart, lancEnd);
                 }
             }
         }
         
-        // Se a inclusão foi confirmada e não é duplicado
         if (incluir && !mostrados.some(m => m.id === raw.id)) {
-          
           mostrados.push({ id: raw.id || raw._id || '', tipo, valor, dataLanc, dataVenc, forma, descricao, status: raw.status });
           if (tipo === 'entrada') totalEntradas += valor;
           else if (tipo === 'saida') totalSaidas += valor;
         }
       });
 
-      // renderiza tabela (se existir)
       if (tbody) {
-        mostrados.sort((a, b) => (b.dataLanc?.getTime() || 0) - (a.dataLanc?.getTime() || 0)); // Ordena por data de lançamento
+        mostrados.sort((a, b) => (b.dataLanc?.getTime() || 0) - (a.dataLanc?.getTime() || 0));
         
         if (mostrados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">Nenhum lançamento encontrado para os filtros.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">Nenhum lançamento encontrado.</td></tr>';
         } else {
             tbody.innerHTML = '';
-            const hoje = startOfDay(new Date()); // Usando startOfDay para comparação de data
+            const hoje = startOfDay(new Date());
             mostrados.forEach(it => {
               const tr = document.createElement('tr');
               const dLanc = it.dataLanc ? it.dataLanc.toLocaleDateString('pt-BR') : '-';
@@ -2086,16 +1959,14 @@
               const isEntrada = it.tipo === 'entrada';
               const dataVencNormalizada = it.dataVenc ? startOfDay(it.dataVenc) : null;
               
-              // Verifica se está vencido (não é entrada, tem vencimento, vencimento < hoje, e não está pago)
               const isVencido = !isEntrada && dataVencNormalizada && dataVencNormalizada < hoje && it.status !== 'pago';
               const classValor = isEntrada ? 'text-green-700' : (isVencido ? 'text-red-700' : 'text-red-600');
               
-              // Botão Pagar/Estornar
               let btnPagar = '';
               if (!isEntrada && it.status === 'a pagar') {
-                  btnPagar = `<button onclick="mudarStatusCaixa('${it.id}', 'pago')" class="text-green-600 hover:text-green-900 mr-2 small-btn" title="Pagar">✅ Pagar</button>`;
+                  btnPagar = `<button onclick="mudarStatusCaixa('${it.id}', 'pago')" class="text-green-600 hover:text-green-900 mr-2 small-btn" title="Pagar">✅ Pago</button>`;
               } else if (!isEntrada && it.status === 'pago') {
-                  btnPagar = `<button onclick="mudarStatusCaixa('${it.id}', 'a pagar')" class="text-yellow-600 hover:text-yellow-800 mr-2 small-btn" title="Estornar Pagamento">↩️ Estornar</button>`;
+                  btnPagar = `<button onclick="mudarStatusCaixa('${it.id}', 'a pagar')" class="text-yellow-600 hover:text-yellow-800 mr-2 small-btn" title="Estornar">↩️ Estornar</button>`;
               }
 
               tr.className = `hover:bg-gray-100 ${isVencido ? 'bg-red-50' : ''}`;
@@ -2116,92 +1987,62 @@
         }
       }
 
-      // atualiza totalizadores (tenta IDs padrão do seu HTML)
       const saldo = totalEntradas - totalSaidas;
       document.getElementById('totalEntradasCaixa').textContent = formatBRL(totalEntradas);
       document.getElementById('totalSaidasCaixa').textContent = formatBRL(totalSaidas);
       document.getElementById('saldoAtualCaixa').textContent = formatBRL(saldo);
       
-      // Chamada para verificar alertas usando TODOS os itens carregados
       verificarAlertasVencimento(window.caixaItems); 
-      
-      console.log('[filtrarCaixa] total itens=', items.length, ' exibidos=', mostrados.length, ' totEntradas=', totalEntradas, ' totSaidas=', totalSaidas);
     }
     
-    /** Inicializa o Listener do Firestore e carrega os dados iniciais */
     function loadAllCaixaAndFilter() {
-        // Exibe "Carregando" na tabela
         document.getElementById('caixaTable').innerHTML = '<tr><td colspan="6" class="text-center py-4">Carregando dados...</td></tr>';
         
-        const query = db.collection("caixa").orderBy("dataRegistro", "desc");
-        
-        query.get()
+        db.collection("caixa").orderBy("dataRegistro", "desc").get()
         .then(snapshot => {
-            // Mapeia todos os documentos para o array global
             window.caixaItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            // 1. Aplica o filtro e renderiza a tabela
             filtrarCaixaEAtualizarTotais(window.caixaItems);
-            
-            // 2. O alerta de vencimento é chamado DENTRO do filtrarCaixaEAtualizarTotais
         })
         .catch(error => {
-            console.error("Erro ao carregar dados iniciais do caixa:", error);
-            document.getElementById('caixaTable').innerHTML = '<tr><td colspan="6" class="text-center py-4 text-red-500">Erro ao carregar dados. Verifique o console.</td></td>';
+            console.error("Erro ao carregar caixa:", error);
         });
     }
 
-    /** Mudar Status de Pagamento (Pagar/Estornar) */
     async function mudarStatusCaixa(lancamentoId, novoStatus) {
-        // Não usar confirm()
-        console.warn(`Tentando mudar status do lançamento ${lancamentoId} para ${novoStatus}.`);
-
         try {
             await db.collection("caixa").doc(lancamentoId).update({
                 status: novoStatus,
                 dataPagamento: novoStatus === 'pago' ? firebase.firestore.FieldValue.serverTimestamp() : null
             });
-            // Recarrega todos os dados e aplica o filtro
+            showNotification(novoStatus === 'pago' ? "Lançamento marcado como pago." : "Estorno concluído.", "success");
             loadAllCaixaAndFilter(); 
-            console.log(`Lançamento ${novoStatus === 'pago' ? 'pago' : 'estornado'} com sucesso!`);
         } catch (error) {
             console.error("Erro ao mudar status:", error);
-            // alert("Erro ao realizar a operação."); // Não usar alert
         }
     }
 
-
-    /** Excluir Lançamento */
     async function excluirLancamentoCaixa(lancamentoId) {
-        // Não usar confirm()
-        console.warn(`Tentativa de excluir lançamento ${lancamentoId}. Excluindo...`);
-        
+        if (!confirm('Deseja excluir este lançamento de caixa?')) return;
         try {
             await db.collection("caixa").doc(lancamentoId).delete();
-            console.log('Lançamento excluído com sucesso!');
+            showNotification("Lançamento removido permanentemente.", "success");
             loadAllCaixaAndFilter();
         } catch (error) {
             console.error("Erro ao excluir lançamento:", error);
-            // alert("Erro ao excluir lançamento. Verifique o console."); // Não usar alert
         }
     }
 
-    /** Abre Modal para Edição de Lançamento */
     async function editarLancamentoCaixa(lancamentoId) {
         lancamentoEmEdicaoId = lancamentoId;
         document.getElementById('lancamentoIdCaixa').value = lancamentoId;
         
         try {
             const doc = await db.collection('caixa').doc(lancamentoId).get();
-            if (!doc.exists) {
-                console.error('Lançamento não encontrado!');
-                return;
-            }
+            if (!doc.exists) return;
             const lancamento = doc.data();
 
             const dataNormalizada = toDate(lancamento.data);
             const vencimentoNormalizada = toDate(lancamento.dataVencimento);
-
 
             document.getElementById('editTipoCaixa').value = lancamento.tipo;
             document.getElementById('editValorCaixa').value = floatToCurrency(lancamento.valor || 0);
@@ -2209,7 +2050,6 @@
             document.getElementById('editCategoriaCaixa').value = lancamento.categoria || '';
             document.getElementById('editDescricaoCaixa').value = lancamento.descricao;
             
-            // Vencimento (para Parcelados/Saídas)
             if (vencimentoNormalizada) {
                 document.getElementById('editDataVencimento').value = vencimentoNormalizada.toISOString().split('T')[0];
                 document.getElementById('editOpcoesParcela').classList.remove('hidden');
@@ -2224,7 +2064,6 @@
             document.getElementById('modalCaixa').style.display = "flex";
         } catch (error) {
             console.error('Erro ao buscar lançamento para edição:', error);
-            // alert('Erro ao carregar dados para edição.'); // Não usar alert
         }
     }
 
@@ -2234,7 +2073,6 @@
         lancamentoEmEdicaoId = null;
     }
 
-    /** Salva Edição de Lançamento */
     async function salvarEdicaoCaixa() {
         const id = document.getElementById('lancamentoIdCaixa').value;
         const tipo = document.getElementById('editTipoCaixa').value;
@@ -2245,7 +2083,7 @@
         const dataVencimento = document.getElementById('editDataVencimento').value;
 
         if (valor <= 0 || !data) {
-            console.error('Preencha os campos obrigatórios (Tipo, Valor e Data).');
+            showNotification("Por favor, configure o valor e a data do lançamento.", "error");
             return;
         }
 
@@ -2254,49 +2092,41 @@
             valor,
             data: firebase.firestore.Timestamp.fromDate(new Date(data + 'T12:00:00')),
             categoria,
-            descricao: descricao || 'Lançamento Manual (Editado)',
+            descricao: descricao || 'Lançamento Editado',
             dataAtualizacao: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         if (dataVencimento && dataVencimento !== "") {
             updates.dataVencimento = firebase.firestore.Timestamp.fromDate(new Date(dataVencimento + 'T12:00:00'));
         } else {
-            // Se o campo de vencimento foi limpo na edição, garanta que seja salvo como null
              updates.dataVencimento = null; 
         }
 
         try {
             await db.collection("caixa").doc(id).update(updates);
-            console.log('Lançamento atualizado com sucesso!');
+            showNotification("Registro updated successfully!", "success");
             fecharModalCaixa();
             loadAllCaixaAndFilter();
         } catch (error) {
             console.error('Erro ao salvar edição:', error);
-            // alert('Erro ao salvar edição do lançamento.'); // Não usar alert
+            showNotification("Erro na atualização cadastral.", "error");
         }
     }
 
-    /** Verifica e Exibe Alertas de Vencimento */
     function verificarAlertasVencimento(lancamentos) {
-        // Usa normalizeToDate para comparar apenas o dia
         const hoje = normalizeToDate(new Date()); 
 
         const vencidos = lancamentos.filter(l => {
             const vencimento = toDate(l.dataVencimento);
             if (!vencimento) return false;
-            
             const dataVencNormalizada = normalizeToDate(vencimento);
-            
-            // Verifica se é saída, está a pagar (ou não está pago) e o dia de vencimento é HOJE ou ANTES
             return l.tipo === 'saida' && 
                 dataVencNormalizada && 
                 dataVencNormalizada.getTime() <= hoje.getTime() && 
                 l.status !== 'pago';
         });
         
-        // Filtra para mostrar apenas os vencidos que NÃO foram pagos
         const vencidosNaoPagos = vencidos.filter(l => l.status !== 'pago');
-        
         const alertaDiv = document.getElementById('alertaVencimentos');
         const listaUl = document.getElementById('listaVencimentos');
         
@@ -2304,11 +2134,7 @@
             alertaDiv.classList.remove('hidden');
             listaUl.innerHTML = vencidosNaoPagos.map(v => {
                 const vencimento = toDate(v.dataVencimento);
-                const dataVenc = vencimento ? vencimento.toLocaleDateString('pt-BR') : '-';
-                
-                // Classifica se vencido hoje ou atrasado
-                const statusTexto = (startOfDay(vencimento).getTime() === hoje.getTime()) ? 'VENCE HOJE' : 'ATRASADO';
-
+                const statusTexto = (startOfDay(vencimento).getTime() === hoje.getTime()) ? 'HOJE' : 'ATRASADO';
                 return `<li>[${statusTexto}] ${v.descricao} (${floatToCurrency(v.valor)})</li>`;
             }).join('');
         } else {
@@ -2317,87 +2143,73 @@
     }
 
     // ----------------------------------------------------
-    // # LÓGICA DO CADASTRO DE CAMINHÃO (ABA CAMINHAO)
+    // # LÓGICA DO CADASTRO DE CARRO (ABA CARRO)
     // ----------------------------------------------------
 
-    /** Limpa formulário de Caminhão e volta para o modo Cadastro */
     function limparCamposCaminhao() {
         document.getElementById('nomeCaminhao').value = '';
         document.getElementById('placaCaminhao').value = '';
         caminhaoEmEdicaoId = null;
-        document.getElementById('tituloCaminhao').textContent = 'Cadastro de Caminhões';
-        document.getElementById('btnSalvarCaminhao').textContent = '💾 Salvar Caminhão';
+        document.getElementById('tituloCaminhao').textContent = 'Cadastro de Veículos (Carros)';
+        document.getElementById('btnSalvarCaminhao').textContent = '💾 Salvar Veículo';
         document.getElementById('btnLimparCaminhao').classList.add('hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    /** Salva ou Edita Caminhão */
+    /** Salvar carro de forma totalmente aberta e sem dados obrigatórios */
     async function salvarCaminhao() {
-        const nome = document.getElementById('nomeCaminhao').value.trim();
-        const placa = document.getElementById('placaCaminhao').value.trim();
-
-        if (!nome || !placa) {
-            console.error('Preencha Nome e Placa do Caminhão.');
-            return;
-        }
+        // Se deixar em branco, preenche com um valor genérico amigável
+        const nome = document.getElementById('nomeCaminhao').value.trim() || "Modelo Não Especificado";
+        const placa = document.getElementById('placaCaminhao').value.trim() || "Sem Placa";
 
         const caminhaoData = { nome, placa };
 
         try {
             if (caminhaoEmEdicaoId) {
-                // Edição
                 await db.collection("caminhoes").doc(caminhaoEmEdicaoId).update(caminhaoData);
-                console.log('Caminhão atualizado com sucesso!');
+                showNotification("Carro atualizado com sucesso!", "success");
             } else {
-                // Novo Cadastro
                 await db.collection("caminhoes").add(caminhaoData);
-                console.log('Caminhão salvo com sucesso!');
+                showNotification("Carro cadastrado com sucesso!", "success");
             }
             
             limparCamposCaminhao();
             carregarCaminhoes();
-            carregarOptionsCaminhao(); // Atualiza a lista de seleção
+            carregarOptionsCaminhao(); 
         } catch (error) {
-            console.error("Erro ao salvar/atualizar caminhão:", error);
-            // alert("Erro ao salvar/atualizar caminhão. Verifique o console."); // Não usar alert
+            console.error("Erro ao salvar veículo:", error);
+            showNotification("Erro ao cadastrar veículo.", "error");
         }
     }
 
-    /** Prepara o formulário para edição de um caminhão */
     async function editarCaminhao(caminhaoId) {
         try {
             const doc = await db.collection('caminhoes').doc(caminhaoId).get();
-            if (!doc.exists) {
-                console.error('Caminhão não encontrado!');
-                return;
-            }
+            if (!doc.exists) return;
             const caminhao = doc.data();
             
             caminhaoEmEdicaoId = caminhaoId;
-            document.getElementById('nomeCaminhao').value = caminhao.nome;
-            document.getElementById('placaCaminhao').value = caminhao.placa;
-            document.getElementById('tituloCaminhao').textContent = 'Editar Caminhão';
-            document.getElementById('btnSalvarCaminhao').textContent = '🔄 Atualizar Caminhão';
+            document.getElementById('nomeCaminhao').value = caminhao.nome === "Modelo Não Especificado" ? "" : caminhao.nome;
+            document.getElementById('placaCaminhao').value = caminhao.placa === "Sem Placa" ? "" : caminhao.placa;
+            document.getElementById('tituloCaminhao').textContent = 'Editar Cadastro do Carro';
+            document.getElementById('btnSalvarCaminhao').textContent = '🔄 Atualizar Carro';
             document.getElementById('btnLimparCaminhao').classList.remove('hidden');
-            window.scrollTo({ top: 0, behavior: 'smooth' }); // Volta para o formulário
+            window.scrollTo({ top: 0, behavior: 'smooth' }); 
         } catch (error) {
-            console.error('Erro ao buscar caminhão para edição:', error);
-            // alert('Erro ao carregar dados do caminhão para edição.'); // Não usar alert
+            console.error('Erro ao buscar carro:', error);
         }
     }
 
-
-    /** Carrega e Exibe Caminhões */
     async function carregarCaminhoes() {
         const tabelaBody = document.getElementById('caminhoesTableBody');
-        tabelaBody.innerHTML = '<tr><td colspan="3" class="text-center py-4">Carregando caminhões...</td></tr>';
+        tabelaBody.innerHTML = '<tr><td colspan="3" class="text-center py-4">Carregando veículos...</td></tr>';
         
         try {
             const snapshot = await db.collection("caminhoes").orderBy("nome", "asc").get();
-            tabelaBody.innerHTML = ''; // Limpa antes de renderizar
+            tabelaBody.innerHTML = ''; 
 
             if (snapshot.empty) {
-                tabelaBody.innerHTML = '<tr><td colspan="3" class="text-center py-4">Nenhum caminhão cadastrado.</td></tr>';
+                tabelaBody.innerHTML = '<tr><td colspan="3" class="text-center py-4">Nenhum carro em estoque.</td></tr>';
                 return;
             }
 
@@ -2418,42 +2230,34 @@
             });
 
         } catch (error) {
-            console.error("Erro ao carregar caminhões:", error);
-            tabelaBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-red-500">Erro ao carregar dados.</td></tr>';
+            console.error("Erro ao carregar veículos:", error);
         }
     }
 
-    /** Excluir Caminhão */
     async function excluirCaminhao(caminhaoId) {
-        // Não usar confirm()
-        console.warn(`Tentativa de excluir caminhão ${caminhaoId}. Excluindo...`);
-        
+        if (!confirm('Deseja excluir este veículo do estoque?')) return;
         try {
             await db.collection("caminhoes").doc(caminhaoId).delete(); 
-            
-            console.log('Caminhão excluído com sucesso!');
-            carregarCaminhoes(); // Atualiza a tabela
-            carregarOptionsCaminhao(); // Atualiza a lista de seleção
+            showNotification("Carro excluído do estoque.", "success");
+            carregarCaminhoes(); 
+            carregarOptionsCaminhao(); 
         } catch (error) {
-            console.error("Erro ao excluir caminhão:", error);
-            // alert("Erro ao excluir caminhão. Verifique o console."); // Não usar alert
+            console.error("Erro ao excluir veículo:", error);
         }
     }
 
-
-    /** Carrega Caminhões no <select> de Acerto */
     async function carregarOptionsCaminhao() {
         const select = document.getElementById('caminhaoAcerto');
-        select.innerHTML = '<option value="">Selecione o Caminhão</option>';
+        select.innerHTML = '<option value="">Selecione o Carro (Opcional)</option>';
 
         try {
             const snapshot = await db.collection("caminhoes").orderBy("nome", "asc").get();
             snapshot.forEach(doc => {
                 const caminhao = doc.data();
-                select.innerHTML += `<option value="${doc.id}">${caminhao.nome} - ${caminhao.placa}</option>`;
+                select.innerHTML += `<option value="${doc.id}">${caminhao.nome} - Placa: ${caminhao.placa}</option>`;
             });
         } catch (error) {
-            console.error("Erro ao carregar options de caminhão:", error);
+            console.error("Erro ao carregar seletor de carros:", error);
         }
     }
 
@@ -2461,25 +2265,18 @@
     // # FUNÇÕES GERAIS E INICIALIZAÇÃO
     // ----------------------------------------------------
 
-    /** Ordena Tabela */
     function ordenarTabela(tableId, columnIndex) {
         const tabela = document.getElementById(tableId);
-        let switching = true;
         let dir = "asc"; 
-        let shouldSwitch;
-        let i;
-        
         const tbody = tabela.querySelector('tbody');
         if (!tbody) return;
         const th = tabela.querySelectorAll("th")[columnIndex];
 
-        // 1. Alterna entre asc e desc (usando data-ordem)
         const ordem = th.dataset.ordem === "asc" ? "desc" : "asc";
         tabela.querySelectorAll("th").forEach(th => th.removeAttribute("data-ordem"));
         th.dataset.ordem = ordem;
 
         const linhas = Array.from(tbody.querySelectorAll("tr"));
-
 
         linhas.sort((a, b) => {
             const aText = a.children[columnIndex].textContent.trim();
@@ -2487,70 +2284,58 @@
             
             let resultado = 0;
             let isNumeric = a.children[columnIndex].className.includes("text-right");
-            
-            // Tratamento de Data (Colunas 0 e 4 na tabela Caixa, Coluna 2/5 na tabela Acerto)
-            const isDateCol = (tableId === 'caixaTable' && (columnIndex === 0 || columnIndex === 4)) || (tableId === 'acertosTable' && (columnIndex === 2 || columnIndex === 5));
+            const isDateCol = (tableId === 'caixaTable' && (columnIndex === 0 || columnIndex === 4));
             
             if (isDateCol) {
-                // Se for data, usa parseDateBR para obter o timestamp
                 resultado = parseDateBR(aText).getTime() - parseDateBR(bText).getTime();
             } else if (isNumeric) {
-                // Se for valor, usa parseNumber
                 resultado = parseNumber(aText) - parseNumber(bText);
             } else {
-                // Para texto, usa localeCompare
                 resultado = aText.localeCompare(bText, 'pt-BR', { numeric: true });
             }
 
             return ordem === "asc" ? resultado : -resultado;
         });
 
-        // 3. Reinsere as linhas ordenadas
         tbody.innerHTML = "";
         linhas.forEach(l => tbody.appendChild(l));
     }
 
-    /** Inicialização do Sistema (após login) */
-    function initSystem() {
-        // Carrega nome da empresa
-        const nomeEmpresa = localStorage.getItem("nomeEmpresa") || "Nome da Empresa";
+    async function initSystem() {
+        const nomeEmpresa = localStorage.getItem("nomeEmpresa") || "Minha Concessionária";
         document.getElementById("nomeEmpresaHeader").innerText = nomeEmpresa;
         document.getElementById("novoNomeEmpresa").value = nomeEmpresa;
 
-        // Inicializa Canvas de Assinatura (para garantir que sejam configurados)
-        // initCanvas('Motorista'); // Não chamamos aqui, mas sim ao abrir o modal
-        // initCanvas('Proprietario');
+        // Tenta autenticação anônima silenciosa para evitar falha de permissão de escrita/leitura
+        try {
+            if (!firebase.auth().currentUser) {
+                await firebase.auth().signInAnonymously();
+                console.log("Autenticação anônima do Firebase estabelecida com sucesso.");
+            }
+        } catch (authError) {
+            console.warn("Autenticação anônima não pôde ser ativada, continuando no modo livre:", authError);
+        }
 
-        // Carrega dados iniciais
         carregarOptionsCaminhao();
         carregarAcertos();
-        loadAllCaixaAndFilter(); // Chamada inicial de carga e filtro do caixa
+        loadAllCaixaAndFilter(); 
     }
     
-    /** Inicialização ao carregar a página */
     window.onload = () => {
-        // Inicialização do Canvas em onload (importante para o redimensionamento inicial)
-        // O redimensionamento deve acontecer dentro de initCanvas() ao abrir o modal,
-        // mas as variáveis globais precisam ser inicializadas.
-
-        // Login Persistente
         if (localStorage.getItem("usuarioLogado") === "true") {
             document.getElementById("loginPage").style.display = "none";
             document.getElementById("appPage").classList.remove("hidden");
             initSystem();
-            changeTab('acertos'); // Garante a aba correta
+            changeTab('acertos'); 
         } else {
-            // Garante que o app esteja escondido e o login visível
             document.getElementById("loginPage").style.display = "flex";
             document.getElementById("appPage").classList.add("hidden");
         }
     };
     
-// Alias para o botão do filtro
-function filtrarCaixa() {
-    loadAllCaixaAndFilter(); // Chama a função principal de carga e filtro
-}
+    function filtrarCaixa() {
+        loadAllCaixaAndFilter(); 
+    }
 </script>
 </body> 
 </html>
-
